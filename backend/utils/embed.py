@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 import requests
 
 from schemas.embed import EmbedResult
+from mixins.asyncio import retry_async, retry_sync
 
 load_dotenv()
 
@@ -35,6 +36,7 @@ def create_embedding(
     pass
 
 
+@retry_sync(delay=3)
 def create_embedding(
     texts: str | List[str],
     chunking: bool = True,
@@ -53,4 +55,4 @@ def create_embedding(
         raw = res.content
         return es.validate_json(raw)
 
-    raise Exception
+    raise Exception("텍스트 임베딩에 실패했습니다.")
