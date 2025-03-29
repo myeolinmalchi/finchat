@@ -1,16 +1,17 @@
 from db.models.deposit import DepositModel, DepositChunkModel
 from .base import BaseRepository
 
+from sqlalchemy import func, select
+
 from typing import Any, Dict, List, Optional
 
 from pgvector import SparseVector
-from sqlalchemy import func
 from db.common import V_DIM
 
 
 class DepositRepository(BaseRepository[DepositModel]):
 
-    def search_hybrid(
+    async def search_hybrid(
         self,
         dense_vector: Optional[List[float]] = None,
         sparse_vector: Optional[Dict[Any, float]] = None,
@@ -27,11 +28,9 @@ class DepositRepository(BaseRepository[DepositModel]):
         score_content = ((score_lexical_content * lexical_ratio) + score_dense_content *
                          (1 - lexical_ratio)).label("score_content")
 
-        subq = (
-            self.session.query(
-                DepositChunkModel.deposit_id.label("deposit_id"),
-                func.max(score_content).label("max_score"),
-            ).group_by(DepositChunkModel.deposit_id).subquery()
+        stmt = select(DepositChunkModel).order_by(score_content.desc()).limit(k)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
         )
 
         query = (
