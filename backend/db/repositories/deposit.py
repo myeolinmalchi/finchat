@@ -31,14 +31,3 @@ class DepositRepository(BaseRepository[DepositModel]):
         stmt = select(DepositChunkModel).order_by(score_content.desc()).limit(k)
         result = await self.session.execute(stmt)
         return result.scalars().all()
-        )
-
-        query = (
-            self.session.query(DepositChunkModel).join(
-                subq,
-                (DepositChunkModel.deposit_id == subq.c.deposit_id)
-                & (score_content == subq.c.max_score),
-            ).order_by(subq.c.max_score.desc()).limit(k)
-        )
-
-        return query.all()
