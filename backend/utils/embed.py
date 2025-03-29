@@ -16,7 +16,7 @@ es = TypeAdapter(List[EmbedResult] | EmbedResult)
 
 
 @overload
-def embed(
+def create_embedding(
     texts: str,
     chunking: bool = True,
     truncate: bool = True,
@@ -26,7 +26,7 @@ def embed(
 
 
 @overload
-def embed(
+def create_embedding(
     texts: List[str],
     chunking: bool = True,
     truncate: bool = True,
@@ -35,7 +35,7 @@ def embed(
     pass
 
 
-def embed(
+def create_embedding(
     texts: str | List[str],
     chunking: bool = True,
     truncate: bool = True,
