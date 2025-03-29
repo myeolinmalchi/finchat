@@ -3,7 +3,7 @@ from db.repositories.deposit import DepositRepository
 from db.repositories.faq import FaqRepository
 from db.repositories.loan import LoanRepository
 from schemas.embed import EmbedResult
-from utils.embed import embed
+from utils.embed import create_embedding_async
 
 
 class AppSearchService:
