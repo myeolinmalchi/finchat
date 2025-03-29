@@ -6,3 +6,8 @@ class EmbedResult(BaseModel):
     chunk: Optional[str]
     dense: List[float]
     sparse: Dict[str, float]
+
+
+class RerankResult(BaseModel):
+    index: int
+    score: float
