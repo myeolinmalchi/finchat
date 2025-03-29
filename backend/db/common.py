@@ -79,7 +79,7 @@ _ASession = None
 def get_async_engine() -> AsyncEngine:
     global _aengine
     if _aengine is None:
-        db_type = "postgresql"
+        db_type = "postgresql+asyncpg"
         user = os.environ.get("DB_USER")
         pw = os.environ.get("DB_PASSWORD")
         host = os.environ.get("DB_HOST")
