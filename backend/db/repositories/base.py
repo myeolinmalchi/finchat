@@ -1,9 +1,10 @@
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from functools import wraps
 import logging
 from typing import Callable, Dict, Generic, Tuple, Type, TypeVar, Any, List
-from sqlalchemy.orm import Query, Session
-from db.common import Base, get_session, session_context_var
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Query
+from db.common import Base, get_async_session, session_context_var
 from abc import abstractmethod
 
 logger = logging.getLogger(__name__)
@@ -63,23 +64,23 @@ class BaseRepository(Generic[ModelType], metaclass=TransactionalMetaclass):
     model = None
 
     @property
-    def session(self) -> Session:
+    def session(self) -> AsyncSession:
         return session_context_var.get()
 
-    def create(self, instance: ModelType) -> ModelType:
+    async def create(self, instance: ModelType) -> ModelType:
         self.session.add(instance)
-        self.session.flush()
-        self.session.refresh(instance)
+        await self.session.flush()
+        await self.session.refresh(instance)
         return instance
 
-    def bulk_create(self, objects: List[ModelType]) -> List[ModelType]:
-        self.session.bulk_save_objects(objects)
-        self.session.flush()
+    async def bulk_create(self, objects: List[ModelType]) -> List[ModelType]:
+        self.session.add_all(objects)
+        await self.session.flush()
         return objects
 
-    def create_all(self, objects: List[ModelType]) -> List[ModelType]:
+    async def create_all(self, objects: List[ModelType]) -> List[ModelType]:
         self.session.add_all(objects)
-        self.session.flush()
+        await self.session.flush()
         return objects
 
     def expunge_all(self):
@@ -91,7 +92,12 @@ class BaseRepository(Generic[ModelType], metaclass=TransactionalMetaclass):
             logger.error(f"Error during expunge_all: {str(e)}")
             raise
 
-    def upsert(self, new: ModelType, query: Query[ModelType], columns: List[str] = []) -> ModelType:
+    async def upsert(
+        self,
+        new: ModelType,
+        query: Query[ModelType],
+        columns: List[str] = [],
+    ) -> ModelType:
         prev = query.one_or_none()
         if prev is None:
             self.session.add(new)
@@ -102,7 +108,7 @@ class BaseRepository(Generic[ModelType], metaclass=TransactionalMetaclass):
             value = getattr(new, col)
             setattr(prev, col, value)
 
-        self.session.flush()
+        await self.session.flush()
 
         return prev
 
@@ -110,30 +116,31 @@ class BaseRepository(Generic[ModelType], metaclass=TransactionalMetaclass):
     def upsert_all(self, objects: List[ModelType]) -> List[ModelType]:
         pass
 
-    def update(self, instance: ModelType, data: Dict[str, Any]) -> ModelType:
+    async def update(self, instance: ModelType, data: Dict[str, Any]) -> ModelType:
         for key, value in data.items():
             if hasattr(instance, key):
                 setattr(instance, key, value)
             else:
                 raise AttributeError(f"{type(instance).__name__} has no attribute '{key}'")
 
-        self.session.flush()
+        await self.session.flush()
         return instance
 
-    def update_all(self, instances: List[ModelType], datas: List[Dict[str, Any]]):
+    async def update_all(self, instances: List[ModelType], datas: List[Dict[str, Any]]):
         for instance, data in zip(instances, datas):
-            self.update(instance, data)
+            await self.update(instance, data)
 
-    def delete(self, data: ModelType) -> None:
-        self.session.delete(data)
-        self.session.flush()
+    async def delete(self, data: ModelType) -> None:
+        await self.session.delete(data)
+        await self.session.flush()
 
 
-@contextmanager
-def transaction():
+@asynccontextmanager
+async def transaction():
     session = session_context_var.get()
     if session is None:
-        session = get_session()
+        #session = get_session()
+        session = get_async_session()
         session_context_var.set(session)
 
     # Check if there's already an active transaction
@@ -146,7 +153,7 @@ def transaction():
 
             yield savepoint
 
-            savepoint.commit()
+            await savepoint.commit()
             logger.debug("Savepoint committed")
         else:
             # Start a new transaction
@@ -155,19 +162,19 @@ def transaction():
 
             yield session
 
-            session.commit()
-            session.close()
+            await session.commit()
+            await session.close()
             logger.debug("Transaction committed")
 
     except Exception as e:
         logger.exception("Exception occurred during transaction, rolling back", exc_info=e)
         if is_nested:
             assert savepoint
-            savepoint.rollback()
+            await savepoint.rollback()
             logger.debug("Savepoint rolled back")
         else:
-            session.rollback()
-            session.close()
+            await session.rollback()
+            await session.close()
             logger.debug("Transaction rolled back")
         raise
     finally:
@@ -178,8 +185,8 @@ def transaction():
 def transactional(func):
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
-        with transaction():
-            return func(*args, **kwargs)
+    async def wrapper(*args, **kwargs):
+        async with transaction():
+            return await func(*args, **kwargs)
 
     return wrapper
