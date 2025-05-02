@@ -14,7 +14,7 @@ from itertools import chain
 
 import asyncio
 
-from mixins.http import HTTPMetaclass
+from common.http import HTTPMetaclass
 
 AssistantAnswerT = TypeVar("AssistantAnswerT")
 

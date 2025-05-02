@@ -7,7 +7,7 @@ import os
 from pydantic import TypeAdapter
 import requests
 
-from mixins.asyncio import retry_async, retry_sync
+from common.asyncio import retry_async, retry_sync
 from schemas.embed import EmbedResult, RerankResult
 
 load_dotenv()
