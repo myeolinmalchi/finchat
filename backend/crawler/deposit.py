@@ -20,7 +20,7 @@ from preprocess.html import clean_html
 
 from pydantic import BaseModel
 
-from utils.embed import embed
+from utils.embed import create_embedding
 
 
 class DepositDTO(BaseModel):
@@ -156,7 +156,7 @@ class DepositCrawler(BaseKBCrawler[DepositDTO, DepositModel], SeleniumClient):
             orm.interest = dto.interest
 
         print("임베딩 하는중 ...")
-        embeddings = embed(dto.contents, html=True, chunking=False)
+        embeddings = create_embedding(dto.contents, html=True, chunking=False)
 
         chunks = [
             DepositChunkModel(

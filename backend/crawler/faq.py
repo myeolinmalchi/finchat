@@ -13,7 +13,7 @@ from crawler.base import SeleniumClient, BaseKBCrawler
 from db.common import V_DIM
 from db.models.faq import FaqModel
 from preprocess.html import clean_html
-from utils.embed import embed
+from utils.embed import create_embedding
 
 
 class FaqDTO(BaseModel):
@@ -91,7 +91,7 @@ class FaqCrawler(BaseKBCrawler[FaqDTO, FaqModel], SeleniumClient):
 
         print("임베딩 하는중 ...")
 
-        title_embeddings, content_embeddings = embed([dto.title, dto.content], html=True, chunking=False)
+        title_embeddings, content_embeddings = create_embedding([dto.title, dto.content], html=True, chunking=False)
 
         orm.title_dense_vector = title_embeddings.dense
         orm.title_sparse_vector = SparseVector(title_embeddings.sparse, V_DIM)
