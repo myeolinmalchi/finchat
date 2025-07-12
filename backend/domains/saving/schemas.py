@@ -49,9 +49,14 @@ class SavingSearchResult(BaseModel):
     """메타데이터를 포함하는 적금 상품 검색 결과"""
 
     product: Saving
-    weighted_score: float
-    maturity_details: Optional[dict] = None
-    target_details: Optional[dict] = None
+    score: float
+
+    interest: Optional[int] = None  # 총 이자
+    principal: Optional[int] = None  # 원금
+
+    base_rate_rank: Optional[int] = None  # 기본금리 순위
+    mid_rate_rank: Optional[int] = None  # 중간금리 순위
+    max_rate_rank: Optional[int] = None  # 최대 금리 순위
 
     model_config = ConfigDict(populate_by_name=True)
 
