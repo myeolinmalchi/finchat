@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import datetime
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -74,7 +74,7 @@ class TermPolicy(BaseModel):
     term_unit: Optional[TermUnit] = None
 
     # type: FIXED_DATE
-    maturity_date: Optional[date] = None
+    maturity_date: Optional[datetime] = None
 
 
 # 납입 금액 정책 유형 (Amount)
@@ -120,7 +120,9 @@ class Saving(BaseModel):
         preferential_rates (List[SavingPreferentialRate]): 우대금리 조건 목록.
     """
 
-    id: uuid.UUID = Field(alias="_id", default_factory=uuid.uuid4, frozen=True)
+    id: str = Field(alias="_id",
+                    default_factory=lambda _: str(uuid.uuid4()),
+                    frozen=True)
 
     name: str
     institution: Institution
