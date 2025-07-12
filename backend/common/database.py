@@ -22,7 +22,7 @@ def init_mongodb_client(
 ) -> Tuple[AsyncIOMotorClient, AsyncIOMotorDatabase]:
     """MongoDB 클라이언트 초기 설정"""
 
-    uri = f"mongodb://{user}:{pwd}@{host}:{port}/{dbname}"
+    uri = f"mongodb://{user}:{pwd}@{host}:{port}/{dbname}?authSource=admin"
     client = AsyncIOMotorClient(uri)
 
     database = client.get_database(dbname)
