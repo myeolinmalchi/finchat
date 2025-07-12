@@ -66,16 +66,13 @@ async def raw2saving(raw: dict, client: AsyncOpenAI) -> Saving:
 
 UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 
-INPUT_PATH = Path("savings.jsonl")
+INPUT_PATH = Path("data/savings.jsonl")
 OUTPUT_PATH = Path("data/savings_parsed.jsonl")
 MODEL = "solar-pro"
 MAX_CONCURRENCY = 5
 
 
-async def main(
-    saving_collection: AsyncIOMotorCollection,
-    openai_client: AsyncOpenAI,
-):
+async def parse_raw_datas(openai_client: AsyncOpenAI):
 
     sem = asyncio.Semaphore(MAX_CONCURRENCY)
 
@@ -91,9 +88,29 @@ async def main(
 
     savings: List[Saving] = await asyncio.gather(*(convert(data) for data in raw_datas))
 
+    #result = await insert_savings(saving_collection, savings)
+
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as fp:
+        for saving in savings:
+            json_str = saving.model_dump_json()
+            fp.write(json_str + "\n")
+
+
+async def insert_datas(saving_collection: AsyncIOMotorCollection,):
+
+    raw_datas: List[str] = []
+    with open(OUTPUT_PATH, "r", encoding="utf-8") as fp:
+        for line in fp:
+            raw_datas.append(line)
+
+    def convert(line: str) -> Saving:
+        raw = json.loads(line, strict=False)
+        return Saving(**raw)
+
+    savings: List[Saving] = list(map(convert, raw_datas))
     result = await insert_savings(saving_collection, savings)
 
-    print(f"{len(result['ids'])} items inserted")
+    print(f"{len(result['ids'])} rows added")
 
 
 if __name__ == "__main__":
@@ -107,4 +124,5 @@ if __name__ == "__main__":
     )
 
     saving_collection = database.get_collection("savings")
-    asyncio.run(main(saving_collection, openai_client))
+    #asyncio.run(parse_raw_datas(openai_client))
+    asyncio.run(insert_datas(saving_collection))
