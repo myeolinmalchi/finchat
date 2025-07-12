@@ -9,6 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
 
 import json
+import uuid
 import asyncio
 
 load_dotenv()
