@@ -40,6 +40,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         self.exempt_paths = set(exempt_paths or ["/docs", "/openapi.json", "/token"])
 
     async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         if request.url.path in self.exempt_paths:
             return await call_next(request)
 
