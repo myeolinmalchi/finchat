@@ -5,6 +5,7 @@ from common.database import init_mongodb_client
 from domains.saving.schemas import (
     SavingRateWeights,
     SavingSearchResult,
+    TotalSavingSearchResult,
 )
 
 import math
@@ -443,26 +444,21 @@ async def find_savings(
     monthly_deposit: Optional[int] = None,
     total_term_months: Optional[int] = None,
     top_k: int = 5,
-) -> List[SavingSearchResult]:
+    offset: int = 0,
+) -> TotalSavingSearchResult:
 
-    print(weights)
-    print(target_amount)
-    print(monthly_deposit)
-    print(total_term_months)
-
-    pipeline = build_pipeline(
-        weights=weights,
-        target_amount=target_amount,
-        monthly_deposit=monthly_deposit,
-        total_term_months=total_term_months,
-        top_k=top_k,
-    )
+    pipeline = build_pipeline(weights=weights,
+                              target_amount=target_amount,
+                              monthly_deposit=monthly_deposit,
+                              total_term_months=total_term_months,
+                              top_k=top_k,
+                              offset=offset)
 
     try:
         cursor = collection.aggregate(pipeline)
         raw_datas = await cursor.to_list()
-        pprint(raw_datas)
-        return [SavingSearchResult(**raw) for raw in raw_datas]
+        savings = [SavingSearchResult(**raw) for raw in raw_datas]
+        return TotalSavingSearchResult(savings=savings, offset=offset)
 
     except Exception as e:
         raise RuntimeError("적금 검색에 실패했습니다.") from e
