@@ -129,3 +129,13 @@ async def stream_chat(
         media_type="text/event-stream",
         headers=headers,
     )
+
+
+@router.get("", response_class=StreamingResponse)
+async def get_chat_list(offset: int = 0, size: int = 20):
+    pass
+
+
+@router.get("/{chat_id}", response_class=StreamingResponse)
+async def get_chat_detail(offset: int = 0, size: int = 20):
+    pass
