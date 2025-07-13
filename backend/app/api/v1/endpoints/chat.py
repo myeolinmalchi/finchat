@@ -1,9 +1,10 @@
 from typing import AsyncGenerator, Iterable
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, HTTPException, Header
 from starlette.responses import StreamingResponse
 
+from app.crud import get_history, list_chats, save_msg, save_products, upsert_chat
 from app.schemas.product import ProductInfoDTO, ProductOptionDTO
-from app.schemas.chat import ChatContentDTO, ChatRequest, ChatResponseDTO, ChatResponseStatus
+from app.schemas.chat import ChatContentDTO, ChatDetailResponse, ChatHistoryDTO, ChatListResponse, ChatPreviewDTO, ChatRequest, ChatResponseDTO, ChatResponseStatus
 from fastapi.encoders import jsonable_encoder
 
 from dotenv import load_dotenv
@@ -82,7 +83,11 @@ def tokenize(
 
 
 async def chat_events(req: ChatRequest) -> AsyncGenerator[str, None]:
-    chat_id = req.chat_id or str(uuid.uuid4())
+
+    chat_id = upsert_chat(req.chat_id, None)
+    user_content = ChatContentDTO(message=req.message)
+    save_msg(chat_id, "user", jsonable_encoder(user_content))
+
     final_reply = ("여러 조건을 종합적으로 분석한 결과 "
                    "**KB장병내일준비적금**이 우대금리·가입편의성·군인전용 혜택 측면에서 "
                    "현재 가장 경쟁력이 높다고 판단했습니다.")
@@ -112,8 +117,10 @@ async def chat_events(req: ChatRequest) -> AsyncGenerator[str, None]:
         payload = ChatResponseDTO(chat_id=chat_id, status=status, content=content)
         data_json = json.dumps(jsonable_encoder(payload), ensure_ascii=False)
         yield f"data: {data_json}\n\n"
-
         await asyncio.sleep(0.2)
+
+    save_msg(chat_id, "assistant", jsonable_encoder(assistant_content))
+    save_products(chat_id, jsonable_encoder(DUMMY_PRODUCTS))
 
     yield "data: [DONE]\n\n"
 
@@ -131,11 +138,20 @@ async def stream_chat(
     )
 
 
-@router.get("", response_class=StreamingResponse)
+@router.get("", response_model=ChatListResponse)
 async def get_chat_list(offset: int = 0, size: int = 20):
-    pass
+    rows = list_chats(offset, size)
+    return ChatListResponse(size=len(rows),
+                            offset=offset,
+                            items=[ChatPreviewDTO(**r) for r in rows])
 
 
-@router.get("/{chat_id}", response_class=StreamingResponse)
-async def get_chat_detail(offset: int = 0, size: int = 20):
-    pass
+@router.get("/{chat_id}", response_model=ChatDetailResponse)
+async def get_chat_detail(chat_id: str, offset: int = 0, size: int = 20):
+    rows = get_history(chat_id, offset, size)
+    if not rows:
+        raise HTTPException(status_code=404, detail="chat not found")
+    items = [
+        ChatHistoryDTO(role=r["role"], content=json.loads(r["content"])) for r in rows
+    ]
+    return ChatDetailResponse(size=len(items), offset=offset, items=items)
