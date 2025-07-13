@@ -64,6 +64,12 @@ class SavingSearchResult(BaseModel):
         super().__init__(product=Saving(**data), **data)
 
 
+class TotalSavingSearchResult(BaseModel):
+
+    savings: List[SavingSearchResult]
+    offset: int
+
+
 class SavingIn(BaseModel):
     """적금 상품 저장시 사용되는 DTO"""
 
