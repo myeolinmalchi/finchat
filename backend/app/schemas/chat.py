@@ -21,3 +21,35 @@ class ChatResponseDTO(BaseModel):
     chat_id: str
     status: ChatResponseStatus
     content: Optional[ChatContentDTO] = None
+
+
+class ChatListRequest(BaseModel):
+
+    offset: Optional[int] = None
+    size: Optional[int] = None
+
+
+class ChatHistoryDTO(BaseModel):
+
+    role: Literal["user", "assistant"]
+    content: ChatContentDTO
+
+
+class ChatDetailResponse(BaseModel):
+
+    size: int
+    offset: int
+    items: List[ChatHistoryDTO]
+
+
+class ChatPreviewDTO(BaseModel):
+
+    chat_id: str
+    title: str
+
+
+class ChatListResponse(BaseModel):
+
+    size: int
+    offset: int
+    items: List[ChatPreviewDTO]
