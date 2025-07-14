@@ -84,6 +84,7 @@ async def chat_events(req: ChatRequest) -> AsyncGenerator[str, None]:
     final_reply = ("여러 조건을 종합적으로 분석한 결과 "
                    "**KB장병내일준비적금**이 우대금리·가입편의성·군인전용 혜택 측면에서 "
                    "현재 가장 경쟁력이 높다고 판단했습니다.")
+    assistant_content = ChatContentDTO(message=final_reply, products=DUMMY_PRODUCTS)
 
     steps: list[tuple[ChatResponseStatus, ChatContentDTO | None]] = [
         ("pending", ChatContentDTO(message="기준 금리를 확인하고 있습니다.")),
