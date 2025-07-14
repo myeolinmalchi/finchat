@@ -9,7 +9,6 @@ from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
 
 import json
-import uuid
 import asyncio
 
 load_dotenv()
@@ -18,6 +17,7 @@ router = APIRouter(prefix="")
 
 DUMMY_PRODUCTS = [
     ProductInfoDTO(
+        name="KB장병내일준비적금",
         product_type="saving",
         description="KB장병내일준비적금 (12개월, 최대 6.5%)",
         institution="KB국민은행",
@@ -26,6 +26,7 @@ DUMMY_PRODUCTS = [
         details="군 장병 전용 고금리 적금 상품",
     ),
     ProductInfoDTO(
+        name="KB장병내일준비적금",
         product_type="saving",
         description="KB장병내일준비적금 (12개월, 최대 6.5%)",
         institution="KB국민은행",
@@ -34,6 +35,7 @@ DUMMY_PRODUCTS = [
         details="군 장병 전용 고금리 적금 상품",
     ),
     ProductInfoDTO(
+        name="KB장병내일준비적금",
         product_type="saving",
         description="KB장병내일준비적금 (12개월, 최대 6.5%)",
         institution="KB국민은행",
