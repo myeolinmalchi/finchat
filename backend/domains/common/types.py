@@ -7,3 +7,13 @@ Institution = Literal["KB국민은행", "신한은행", "하나은행", "우리�
 
 # 기간 단위 (연, 월, 일)
 TermUnit = Literal["month", "day", "year"]
+
+
+def unit_map(unit: TermUnit):
+    match unit:
+        case "day":
+            return "일"
+        case "month":
+            return "개월"
+        case "year":
+            return "년"
