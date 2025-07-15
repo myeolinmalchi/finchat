@@ -3,13 +3,10 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from domains.common.types import Institution, TermUnit
+from domains.common.types import Institution, TermUnit, unit_map
 
-from .types import (
-    SavingInterestType,
-    SavingEarnMethod,
-    SavingPreferentialRateType,
-)
+from .types import (SavingInterestType, SavingEarnMethod, SavingPreferentialRateType,
+                    saving_interest_type_map, saving_earn_method_map)
 
 import uuid
 
@@ -51,6 +48,10 @@ class BaseInterestRateTier(BaseModel):
 
     min_term: int
     max_term: Optional[int] = None
+
+    # 아 시발
+    # term_unit: TermUnit
+
     interest_rate: float
 
 
@@ -144,3 +145,66 @@ class Saving(BaseModel):
 
     base_interest_rate: float | List[BaseInterestRateTier]
     preferential_rates: List[SavingPreferentialRate]
+
+    def __str__(self) -> str:
+
+        def format_term_policy(p: TermPolicy) -> str:
+            unit = unit_map(p.term_unit or "month")
+            if p.policy_type == "RANGE":
+                return f"{p.min_term}{unit}" + (f" ~ {p.max_term}{unit}"
+                                                if p.max_term else "")
+            if p.policy_type == "FIXED_DURATION":
+                return f"{p.min_term}{unit} 고정"
+            if p.policy_type == "CHOICES":
+                choices = ", ".join(f"{c}{unit}" for c in p.choices or [])
+                return f"선택 ({choices})"
+            if p.policy_type == "FIXED_DATE":
+                return f"{p.maturity_date:%Y년 %m월 %d일} 만기"
+            return ""
+
+        def format_amount_policy(p: AmountPolicy) -> str:
+            unit = unit_map(p.amount_unit or "month")
+            if p.policy_type == "RANGE":
+                return f"{p.min_amount:,}원 이상" + (f" ~ {p.max_amount:,}원 이하" if
+                                                  p.max_amount else "") + f" / {unit}"
+            if p.policy_type == "CHOICES":
+                choices = ", ".join(f"{c:,}원" for c in p.choices or [])
+                return f"선택 ({choices}) / {unit}"
+            if p.policy_type == "FIXED_AMOUNT":
+                return f"{p.fixed_amount:,}원 고정 / {unit}"
+            return ""
+
+        def format_base_rate(rate) -> str:
+            if isinstance(rate, float):
+                return f"{rate:.2f}%"
+
+            tiers = [
+                f"  - {t.min_term}개월 이상: {t.interest_rate:.2f}%" if t.max_term is None
+                else f"  - {t.min_term} ~ {t.max_term}개월: {t.interest_rate:.2f}%"
+                for t in rate
+            ]
+            return "\n" + "\n".join(tiers)
+
+        def format_pref_rates(prs: List[SavingPreferentialRate]) -> str:
+            lines = []
+            for pr in prs:
+                tier_str = "\n".join(
+                    f"    - {tier.condition}: +{tier.interest_rate:.2f}%"
+                    for tier in pr.tiers)
+                lines.append(f"  - {pr.description}\n{tier_str}")
+            return "\n".join(lines)
+
+        lines = [
+            f"상품명: {self.name}",
+            f"기관: {self.institution}",
+            f"대상: {self.targets}",
+            f"특판: {self.event or '없음'}",
+            f"가입 기간: {format_term_policy(self.term)}",
+            f"납입 금액: {format_amount_policy(self.amount)}",
+            f"금리 유형: {saving_interest_type_map[self.interest_type]}, 적립 방식: {saving_earn_method_map[self.earn_method]}",
+            f"기본 금리: {format_base_rate(self.base_interest_rate)}",
+            "우대 금리:",
+            format_pref_rates(self.preferential_rates) or "없음",
+        ]
+        return "\n".join(lines)
+
