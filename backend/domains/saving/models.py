@@ -105,19 +105,24 @@ class Saving(BaseModel):
     """금융 기관의 단일 적금 상품 정보
 
     Attributes:
-        id (uuid.UUID): 상품의 고유 식별자.
+        id (str): 상품의 고유 식별자.
+
         name (str): 상품명.
         institution (Institution): 상품을 제공하는 기관.
-        min_term (int): 최소 가입 기간.
-        max_term (int): 최대 가입 기간.
-        term_unit (SavingTermUnit): 가입 기간 단위 ('month', 'day', 'year').
-        min_amount (int): 최소 적립 금액.
-        max_amount (int): 최대 적립 금액.
-        amount_unit (SavingAmountUnit): 적립 주기 단위 ('month', 'day', 'year').
+        targets (str): 상품 가입 대상.
+
+        event (str | None): 특판
+
+
+        term (TermPolicy): 상품 가입 기간 관련 정책
+        amount (AmountPolicy): 상품 납입 금액 관련 정책
+
         interest_type (SavingInterestType): 금리 유형 ('fixed', 'variable').
         earn_method (SavingEarnMethod): 적립 방식 ('fixed', 'flexible').
-        base_interest_rate (float): 기본 금리 (%p per year).
-        preferential_rates (List[SavingPreferentialRate]): 우대금리 조건 목록.
+        enroll_method (str | None): 가입 방법.
+
+        base_interest_rate (float | List[BaseInterestRateTier]): 기본금리
+        preferential_rates (List[SavingPreferentialRate]): 우대금리
     """
 
     id: str = Field(alias="_id",
