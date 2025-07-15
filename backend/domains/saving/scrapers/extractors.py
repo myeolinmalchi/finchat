@@ -91,7 +91,7 @@ async def extract_saving_preferential_rates(
             },
         ],
         response_format=saving_preferential_rate_response_format,  # type: ignore
-        max_tokens=1024,
+        max_tokens=8192,
     )
 
     content = response.choices[0].message.content
@@ -149,7 +149,7 @@ BASE_INTEREST_RATE_SYSTEM_PROMPT = ("당신은 금융 데이터 추출 어시스
 async def extract_base_interest_rate_tiers(
     client: AsyncOpenAI,
     html_snippet: str,
-    model: str = "solar-pro",
+    model: str = "solar-pro2",
 ) -> List[BaseInterestRateTier]:
     """
     HTML 테이블에서 기본 금리 구간을 추출한다.
@@ -165,6 +165,7 @@ async def extract_base_interest_rate_tiers(
     resp = await client.chat.completions.create(
         model=model,
         temperature=0.3,
+        reasoning_effort="medium",
         messages=[
             {
                 "role": "system",
@@ -176,7 +177,7 @@ async def extract_base_interest_rate_tiers(
             },
         ],
         response_format=base_rate_response_format,  # type: ignore
-        max_tokens=1024,
+        max_tokens=8192,
     )
 
     content = resp.choices[0].message.content

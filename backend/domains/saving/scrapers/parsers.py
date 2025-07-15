@@ -115,7 +115,7 @@ async def _parse_term_policy_llm(text: str, client: AsyncOpenAI) -> TermPolicy:
         model="solar-pro",
         messages=messages,  # type: ignore
         response_format=schema,  # type: ignore
-        max_tokens=1024,
+        max_tokens=8192,
     )
 
     content = response.choices[0].message.content
@@ -305,7 +305,7 @@ async def _parse_amount_policy_llm(text: str, client: AsyncOpenAI) -> AmountPoli
         model="solar-pro",
         messages=messages,  # type: ignore
         response_format=schema,  # type: ignore
-        max_tokens=1024,
+        max_tokens=8192,
     )
 
     content = response.choices[0].message.content

@@ -82,8 +82,8 @@ def parse_basic_info(soup: BeautifulSoup):
         if desc_element:
             data["event_offer"] = desc_element.get_text(strip=True)
 
-    base_interest_rate_element = main_info_element.select_one(
-        'dd[class^="MainInfo_rate"]')
+    base_interest_rate_element = main_info_element.select(
+        'dd[class^="MainInfo_rate"]')[-1]
 
     if not base_interest_rate_element:
         raise ValueError("기본 금리 정보가 존재하지 않습니다.")

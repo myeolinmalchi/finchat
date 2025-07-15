@@ -2,6 +2,8 @@ import asyncio, json
 from pathlib import Path
 from typing import List
 
+from tqdm import tqdm
+
 from motor.motor_asyncio import AsyncIOMotorCollection
 import uvloop
 from openai import AsyncOpenAI
@@ -26,12 +28,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import re
+
 
 async def raw2saving(raw: dict, client: AsyncOpenAI) -> Saving:
 
     data = {
         "name": raw["basic_info"]["title"],
-        "institution": raw["basic_info"]["institution"]
+        "institution": raw["basic_info"]["institution"],
+        "targets": raw["product_guide"].get("targets", "-"),
+        "enroll_method": raw["product_guide"].get("enroll_method", "fixed"),
+        "event": raw["basic_info"].get("enroll_method", None)
     }
 
     tasks = {}
@@ -47,8 +54,18 @@ async def raw2saving(raw: dict, client: AsyncOpenAI) -> Saving:
             extract_base_interest_rate_tiers(client, html_table))
 
     else:
+
+        def extract_percentages(text: str) -> float:
+            """XX.XX% -> XX.XX"""
+            pattern = r"(\d+(?:\.\d{1,2})?)%"
+            temp = re.findall(pattern, text)
+            if not temp:
+                raise ValueError(f"{text}를 숫자로 변환하지 못했습니다.")
+
+            return float(temp[0])
+
         raw_interest_rate: str = raw["basic_info"]["base_interest_rate"]
-        data["base_interest_rate"] = float(raw_interest_rate.lstrip("연").rstrip("%"))
+        data["base_interest_rate"] = extract_percentages(raw_interest_rate)
 
     cond_text = "\n".join(raw["interest_rate_guide"]["conditions"])
     tasks["preferential_rates"] = asyncio.create_task(
@@ -57,7 +74,8 @@ async def raw2saving(raw: dict, client: AsyncOpenAI) -> Saving:
     raw_interest_type = raw["interest_rate_guide"].get("interest_type", "고정금리")
     data["interest_type"] = "fixed" if raw_interest_type == "고정금리" else "variable"
 
-    data["earn_method"] = "fixed"
+    raw_earn_method = raw["product_guide"].get("earn_method", "정액적립식")
+    data["earn_method"] = "flexible" if "자유" in raw_earn_method else "fixed"
 
     data = {**data, **{key: await task for key, task in tasks.items()}}
 
@@ -86,9 +104,13 @@ async def parse_raw_datas(openai_client: AsyncOpenAI):
         async with sem:
             return await raw2saving(raw, openai_client)
 
-    savings: List[Saving] = await asyncio.gather(*(convert(data) for data in raw_datas))
+    tasks = [asyncio.create_task(convert(line)) for line in raw_datas]
+    #savings: List[Saving] = await asyncio.gather(*(convert(data) for data in raw_datas))
+    savings: List[Saving] = []
 
     #result = await insert_savings(saving_collection, savings)
+    for fut in tqdm(asyncio.as_completed(tasks), total=len(raw_datas), desc="Parsing"):
+        savings.append(await fut)
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as fp:
         for saving in savings:
@@ -97,6 +119,9 @@ async def parse_raw_datas(openai_client: AsyncOpenAI):
 
 
 async def insert_datas(saving_collection: AsyncIOMotorCollection,):
+
+    result = await saving_collection.delete_many({})
+    print(f"Deleted {result.deleted_count} documents.")
 
     raw_datas: List[str] = []
     with open(OUTPUT_PATH, "r", encoding="utf-8") as fp:
@@ -123,6 +148,6 @@ if __name__ == "__main__":
         base_url="https://api.upstage.ai/v1",
     )
 
-    saving_collection = database.get_collection("savings")
     #asyncio.run(parse_raw_datas(openai_client))
+    saving_collection = database.get_collection("savings")
     asyncio.run(insert_datas(saving_collection))
