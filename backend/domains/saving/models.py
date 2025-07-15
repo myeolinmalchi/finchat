@@ -131,12 +131,16 @@ class Saving(BaseModel):
 
     name: str
     institution: Institution
+    targets: str
+
+    event: Optional[str] = None
 
     term: TermPolicy
     amount: AmountPolicy
 
     interest_type: SavingInterestType = "fixed"
     earn_method: SavingEarnMethod = "fixed"
+    enroll_method: Optional[str] = None
 
     base_interest_rate: float | List[BaseInterestRateTier]
     preferential_rates: List[SavingPreferentialRate]
