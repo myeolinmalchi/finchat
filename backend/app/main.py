@@ -12,6 +12,7 @@ from app.api.v1 import router as v1_router
 from common.database import init_mongodb_client
 from fastapi.security.api_key import APIKeyHeader
 
+
 from app.api.v1 import router as v1_router
 
 def create_app(lifespan):

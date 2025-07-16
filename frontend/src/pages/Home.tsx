@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { getChatHistory } from '@/utils/chatStorage';
+// import { getChatHistory } from '@/utils/chatStorage';
 
 import { useChat } from '@/hooks/useChat';
 
@@ -9,14 +9,11 @@ import { MessageItem } from '@/components/MessageItem';
 import { Sidebar } from '@/components/Sidebar';
 
 export const HomePage = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const {
-    selectChat,
-    startNewChat,
-    isStreaming,
-    chatHistory,
-    setChatHistory,
     messages,
+    pendingMessage,
+    isStreaming,
     input,
     setInput,
     sendMessage,
@@ -32,67 +29,77 @@ export const HomePage = () => {
     }
   }, [messages]); // typingText 제외
 
-  useEffect(() => {
-    const history = getChatHistory();
-    setChatHistory(history);
-  }, [setChatHistory]); // setChatHistory를 의존성 배열에 추가
+  // useEffect(() => {
+  //   const history = getChatHistory();
+  //   setChatHistory(history);
+  // }, [setChatHistory]); // setChatHistory를 의존성 배열에 추가
 
-  useEffect(() => {
-    const history = getChatHistory();
-    if (history.length > 0) {
-      const last = history[history.length - 1];
-      selectChat(last.id, last.messages);
-    } else {
-      startNewChat();
-    }
-  }, []);
+  // useEffect(() => {
+  //   const history = getChatHistory();
+  //   if (history.length > 0) {
+  //     const last = history[history.length - 1];
+  //     selectChat(last.id, last.messages);
+  //   } else {
+  //     startNewChat();
+  //   }
+  // }, []);
 
   return (
     <div className="flex h-screen bg-white">
+      <div className="fixed right-[60px] top-[36px] z-50 flex items-center gap-[8px]">
+        <div className="h-8 w-8 rounded-full bg-[#D9D9D9]" />
+        <span className="text-[16px] font-[700] text-[#333534]">
+          이용자 이름
+        </span>
+      </div>
+
       <Sidebar
         isSidebarOpen={isSidebarOpen}
         toggleSidebar={toggleSidebar}
-        startNewChat={startNewChat}
-        chatHistory={chatHistory}
-        onChatSelect={selectChat}
+        // startNewChat={startNewChat}
+        // chatHistory={chatHistory}
+        // onChatSelect={selectChat}
+        startNewChat={() => {}}
+        chatHistory={[]}
+        onChatSelect={() => {}}
       />
 
       <div
-        className={`ml-80 flex h-screen flex-1 flex-col items-center px-6 sm:px-10 md:px-16 lg:px-20 xl:px-24 2xl:px-32 ${
-          messages.length === 0
-            ? 'justify-center'
-            : 'relative pb-[200px] pt-[100px]'
-        }`}
+        className={`ml-[76px] flex h-screen flex-1 flex-col items-center transition-all duration-300 ${messages.length === 0 ? 'justify-center' : 'relative pb-[200px] pt-[144px]'}`}
       >
         {messages.length === 0 && (
-          <div className="mb-9 text-center">
-            <h2 className="text-3xl font-semibold text-[#7C7266]">
+          <div className="mb-[24px] text-center">
+            <h2 className="text-[32px] font-[600] text-[#5D5F62]">
               무엇을 도와드릴까요?
             </h2>
           </div>
         )}
 
         <div
-          className={`w-full max-w-screen-lg ${
-            messages.length === 0 ? '' : 'flex-1 overflow-y-auto pb-[36px]'
+          className={`w-full max-w-[800px] ${
+            messages.length === 0 ? '' : 'flex-1 overflow-y-auto'
           }`}
         >
-          {messages.map((msg, i) => (
-            <MessageItem
-              key={i}
-              message={msg}
-              isStreaming={isStreaming}
-              isLastMessage={i === messages.length - 1}
-            />
+          {messages.map((m, i) => (
+            <MessageItem key={i} chatMessage={m} />
           ))}
+
+          {pendingMessage && (
+            <MessageItem
+              chatMessage={{
+                role: 'assistant',
+                content: { message: pendingMessage },
+              }}
+            />
+          )}
 
           <div ref={bottomRef} />
 
           <div
             className={`${
               messages.length === 0
-                ? 'flex items-center justify-center border-t'
-                : 'absolute bottom-0 left-0 w-full border-t bg-white px-20 py-5'
+                ? 'flex items-center justify-center'
+                : 'absolute bottom-0 left-0 w-full py-5'
             }`}
           >
             <ChatInput

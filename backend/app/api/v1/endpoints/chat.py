@@ -5,11 +5,13 @@ from starlette.responses import StreamingResponse
 from app.crud import get_history, list_chats, save_msg, save_products, upsert_chat
 from app.schemas.product import ProductInfoDTO, ProductOptionDTO
 from app.schemas.chat import ChatContentDTO, ChatDetailResponse, ChatHistoryDTO, ChatListResponse, ChatPreviewDTO, ChatRequest, ChatResponseDTO, ChatResponseStatus
+
 from fastapi.encoders import jsonable_encoder
 
 from dotenv import load_dotenv
 
 import json
+
 import asyncio
 
 load_dotenv()
@@ -83,7 +85,6 @@ def tokenize(
 
 
 async def chat_events(req: ChatRequest) -> AsyncGenerator[str, None]:
-
     chat_id = upsert_chat(req.chat_id, None)
     user_content = ChatContentDTO(message=req.message)
     save_msg(chat_id, "user", jsonable_encoder(user_content))
@@ -92,6 +93,7 @@ async def chat_events(req: ChatRequest) -> AsyncGenerator[str, None]:
                    "**KB장병내일준비적금**이 우대금리·가입편의성·군인전용 혜택 측면에서 "
                    "현재 가장 경쟁력이 높다고 판단했습니다.")
     assistant_content = ChatContentDTO(message=final_reply, products=DUMMY_PRODUCTS)
+
 
     steps: list[tuple[ChatResponseStatus, ChatContentDTO | None]] = [
         ("pending", ChatContentDTO(message="기준 금리를 확인하고 있습니다.")),
@@ -122,6 +124,7 @@ async def chat_events(req: ChatRequest) -> AsyncGenerator[str, None]:
     save_msg(chat_id, "assistant", jsonable_encoder(assistant_content))
     save_products(chat_id, jsonable_encoder(DUMMY_PRODUCTS))
 
+
     yield "data: [DONE]\n\n"
 
 
@@ -136,7 +139,6 @@ async def stream_chat(
         media_type="text/event-stream",
         headers=headers,
     )
-
 
 @router.get("", response_model=ChatListResponse)
 async def get_chat_list(offset: int = 0, size: int = 20):

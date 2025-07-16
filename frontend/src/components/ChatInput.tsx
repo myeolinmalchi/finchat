@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 
-import sendIconHover from '@/assets/send-icon-hover.svg';
-import sendIcon from '@/assets/send-icon.svg';
-import stopIconHover from '@/assets/stop-icon-hover.svg';
-import stopIcon from '@/assets/stop-icon.svg';
+import sendIconDisabled from '@/assets/chat/send-icon-disabled.svg';
+import sendIconHover from '@/assets/chat/send-icon-hover.svg';
+import sendIcon from '@/assets/chat/send-icon.svg';
+import stopIconHover from '@/assets/chat/stop-icon-hover.svg';
+import stopIcon from '@/assets/chat/stop-icon.svg';
 
 interface ChatInputProps {
   input: string;
   setInput: (value: string) => void;
   isStreaming: boolean;
-  onSend: () => void;
+  onSend: (input: string) => void;
   onCancel: () => void;
 }
 
@@ -39,25 +40,25 @@ export const ChatInput = ({
       if (isStreaming) return;
 
       if (!isStreaming && input.trim()) {
-        onSend();
+        onSend(input);
       }
     }
   };
 
   return (
-    <div className="relative mx-auto w-full max-w-screen-lg">
+    <div className="relative mx-auto w-[720px]">
       <textarea
         ref={textareaRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="궁금한 내용을 입력해주세요"
-        className="placeholder-gray-[#C3C3C3] max-h-[220px] min-h-[160px] w-full resize-none overflow-y-auto rounded-[32px] border border-[#EDEDED] bg-white p-6 text-gray-700 shadow-[0px_0px_12px_0px_rgba(98,98,98,0.04)] outline-none"
+        className="max-h-[220px] min-h-[160px] w-full resize-none overflow-y-auto rounded-[24px] border border-[gray2] bg-white p-6 text-[20px] font-[500] text-black placeholder-gray3 shadow-[0px_0px_12px_0px_rgba(98,98,98,0.04)] outline-none"
         disabled={isStreaming}
       />
 
       <button
-        onClick={isStreaming ? onCancel : onSend}
+        onClick={isStreaming ? onCancel : () => onSend(input)}
         onMouseEnter={() => setIsSendOrStopHovered(true)}
         onMouseLeave={() => setIsSendOrStopHovered(false)}
         className="absolute bottom-8 right-6 items-center justify-center"
@@ -68,11 +69,14 @@ export const ChatInput = ({
               ? isSendOrStopHovered
                 ? stopIconHover
                 : stopIcon
-              : isSendOrStopHovered
-                ? sendIconHover
-                : sendIcon
+              : !input.trim()
+                ? sendIconDisabled
+                : isSendOrStopHovered
+                  ? sendIconHover
+                  : sendIcon
           }
           alt={isStreaming ? '중단' : '전송'}
+          className="w-[36px]"
         />
       </button>
     </div>
