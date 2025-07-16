@@ -33,62 +33,7 @@ class Router(TypedDict):
 
 
 
-from langchain_tavily import TavilySearch
 
-search_tool = TavilySearch(max_results=5, include_answer=True, include_raw_content=True)
-
-
-def init_tavily_node(llm: BaseChatModel):
-
-    agent = create_react_agent(
-        model=llm,
-        tools=[search_tool],
-    )
-
-    async def node(state: AgentState):
-        result = await agent.ainvoke(state)
-
-        return {
-            "messages": [
-                HumanMessage(content=result["messages"][-1].content,
-                             name="saving_agent")
-            ],
-            "next": "supervisor"
-        }
-
-    return node
-
-
-class SavingProduct(BaseModel):
-    name: str
-    institution: str
-    base_rate: float
-    max_rate: float
-    pros: List[str]
-    cons: List[str]
-    features: List[str]
-    recommended_reason: str
-
-
-class SavingRecommendation(BaseModel):
-
-    products: List[SavingProduct]
-    explain: str
-
-
-def init_explain_node(llm: BaseChatModel):
-
-    structured = llm.with_structured_output(SavingRecommendation)
-
-    async def node(state: AgentState):
-        result = await structured.ainvoke(state["messages"][-1].content)
-
-        return {
-            "messages": [HumanMessage(content=str(result), name="explain_agent")],
-            "next": "supervisor"
-        }
-
-    return node
 
 
 def init_supervisor_node(llm: BaseChatModel):
