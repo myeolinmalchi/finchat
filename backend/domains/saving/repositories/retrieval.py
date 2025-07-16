@@ -445,7 +445,7 @@ async def find_savings(
     total_term_months: Optional[int] = None,
     top_k: int = 5,
     offset: int = 0,
-) -> TotalSavingSearchResult:
+) -> List[SavingSearchResult]:
 
     pipeline = build_pipeline(weights=weights,
                               target_amount=target_amount,
@@ -458,7 +458,8 @@ async def find_savings(
         cursor = collection.aggregate(pipeline)
         raw_datas = await cursor.to_list()
         savings = [SavingSearchResult(**raw) for raw in raw_datas]
-        return TotalSavingSearchResult(savings=savings, offset=offset)
+
+        return savings
 
     except Exception as e:
         raise RuntimeError("적금 검색에 실패했습니다.") from e
