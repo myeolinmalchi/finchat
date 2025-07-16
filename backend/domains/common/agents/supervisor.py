@@ -20,15 +20,12 @@ options = members + ["FINISH"]
 
 system_prompt = (
     "You are a supervisor agent managing the following workers: "
-    f"{members}. The user's main goal is to receive financial product recommendations "
+    f"{Members.__args__}. The user's main goal is to receive financial product recommendations "
     "that fit their needs, regardless of the type of question they ask.\n\n"
-    "- 'saving_node': Searches internal saving products and recommends suitable options based on the user's situation and goals.\n"
-    "- 'search': Uses external web search to collect additional context or details that can improve the financial product recommendation.\n\n"
-    "For every user request, you must always:\n"
-    "1. You MUST PROVIDE relevant financial product recommendations.\n"
-    "2. Answer the user's original question directly, whether it's about calculations, explanations, or external information.\n\n"
-    "Decide which worker should act next based on the user's message and previous results. "
-    "If no further action is needed, return FINISH.")
+    "- 'saving_node': 사용자의 현재 상황과 요청 내용을 바탕으로 적합한 적금 상품을 검색하는 노드입니다.\n"
+    "- 'explain_node': 추천 상품 목록에 데이터가 존재하면 검색 결과에 대한 설명을 작성하고 워크플로우를 종료합니다.\n"
+    "- 'research_node': 금융 지식, 뉴스 기사, 정부 정책 등의 외부 지식을 보충하기 위해 사용합니다. **정보 검색을 위한 보조 수단으로만 사용합니다.**\n\n"
+)
 
 
 class Router(TypedDict):
