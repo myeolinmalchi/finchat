@@ -1,5 +1,8 @@
+from datetime import datetime
 from typing import List, Literal, Optional, Union
 from pydantic import BaseModel, Field
+
+from pytz import timezone
 
 from app.schemas.product import PartialProductInfoDTO, ProductInfoDTO
 
@@ -46,6 +49,15 @@ class ChatPreviewDTO(BaseModel):
 
     chat_id: str
     title: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        json_encoders = {
+            datetime:
+                lambda v: v.astimezone(timezone('Asia/Seoul')).isoformat(
+                    timespec='milliseconds').replace('+00:00', 'Z')
+        }
 
 
 class ChatListResponse(BaseModel):
