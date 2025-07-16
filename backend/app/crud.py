@@ -3,6 +3,11 @@ import json, uuid
 from app.db import get_conn
 
 
+def update_chat_title(chat_id: str, title: str) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE chats SET title = ? WHERE chat_id = ?", (title, chat_id))
+
+
 def upsert_chat(chat_id: str | None, title: str | None) -> str:
     cid = chat_id or str(uuid.uuid4())
     with get_conn() as conn:
