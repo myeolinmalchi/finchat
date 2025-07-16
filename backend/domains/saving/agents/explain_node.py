@@ -1,0 +1,65 @@
+from typing import List
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langgraph.config import get_stream_writer
+from langgraph.graph import END
+
+from domains.common.agents.graph_state import GraphState
+from domains.saving.agents.prompts import (SAVING_EXPLAIN_NODE_SYSTEM_PROMPT,
+                                           SAVING_EXPLAIN_USER_PROMPT_TEMPLATE)
+
+
+def init_explain_node(llm: BaseChatModel):
+
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", SAVING_EXPLAIN_NODE_SYSTEM_PROMPT),
+        ("user", SAVING_EXPLAIN_USER_PROMPT_TEMPLATE)
+    ])
+
+    async def node(state: GraphState):
+        writer = get_stream_writer()
+
+        print("============ Explain Node ============")
+
+        products = state["selected"]
+
+        if not products:
+            writer({
+                "chat_id": state["chat_id"],
+                "status": "response",
+                "content": {
+                    "message": "적합한 상품을 찾지 못했어요."
+                }
+            })
+
+            return {"next": END}
+
+        blob: str = "\n---\n".join(list(map(str, products)))
+
+        prompt = prompt_template.invoke({
+            "user_info": "",
+            "product_info": blob,
+            "user_question": str(state["messages"][0].content),
+        })
+
+        chunks: List[str] = []
+        async for chunk in llm.astream(prompt):
+            chunk_content = str(chunk.content)
+            chunks.append(chunk_content)
+            writer({
+                "chat_id": state["chat_id"],
+                "status": "response",
+                "content": {
+                    "message": chunk_content
+                }
+            })
+
+        content = "".join(chunks)
+
+        state["messages"].append(AIMessage(content=content, name="explainer"))
+        state["next"] = END
+
+        return state
+
+    return node
