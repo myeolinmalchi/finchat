@@ -121,22 +121,29 @@ def init_graph(
 import asyncio
 
 
-async def test(input: str):
+async def run(query: str):
+    """
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0.3,
+    )
+    """
+    llm = ChatUpstage(
+        model="solar-pro2",
+        temperature=0.0,
+        reasoning_effort="low",
+        max_tokens=16384,
+    )
 
     _, db = init_mongodb_client()
-    graph = build_graph(db)
+    run = init_graph(llm, db)
 
-    input_dict = {
-        "messages": [HumanMessage(content=input)],
-        "next": None,
-    }
-    result = await graph.ainvoke(AgentState(**input_dict))
-
-    print(result["messages"][-1].content)
+    async for _, chunk in run(query, ""):
+        if chunk["status"] == "response":
+            print(chunk["content"]["message"], end="")
+        else:
+            print(chunk)
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        test(
-            "소나타 신형을 구매하고 싶은데, 100만원씩 저축하면 얼마나 걸릴까요? 사회초년생이고, 미혼에 자녀가 없습니다. 출산 계획도 없습니다."
-        ))
+    asyncio.run(run("월 50씩 1년동안 모으려고 하는데 괜찮은 적금 추천좀 해주세요"))
