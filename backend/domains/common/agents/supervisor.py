@@ -15,8 +15,8 @@ from domains.saving.agents.explain_node import init_explain_node
 from domains.saving.agents.saving_subgraph import init_saving_subgraph
 from domains.saving.agents.tool_factory import init_saving_retrieval_tools
 
-members = ["saving_node", "search"]
-options = members + ["FINISH"]
+Members = Literal["explain_node", "saving_node", "research_node"]
+Options = Literal[Members, "END"]
 
 system_prompt = (
     "You are a supervisor agent managing the following workers: "
@@ -29,9 +29,8 @@ system_prompt = (
 
 
 class Router(TypedDict):
-    """Worker to route to next. If no workers needed, route to FINISH."""
+    next: Members
 
-    next: Literal["saving_node", "search", "explain_node", "FINISH"]
 
 
 from langchain_tavily import TavilySearch
