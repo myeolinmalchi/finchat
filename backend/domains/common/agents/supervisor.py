@@ -32,26 +32,36 @@ class Router(TypedDict):
     next: Members
 
 
-
-
-
-
 def init_supervisor_node(llm: BaseChatModel):
 
-    async def supervisor_node(state: AgentState) -> AgentState:
+    async def supervisor_node(state: GraphState):
+        print("============ Supervisor Node ============")
+
+        products = state["selected"]
+
+        if products and len(products) >= state["target_count"]:
+            return {"next": "explain_node"}
+
+        products_str = "### 추천 상품 목록:"
+        if products:
+            products_str += "\n".join([
+                f"{idx}. {product.product.name}"
+                for idx, product in enumerate(products, 1)
+            ])
+        else:
+            products_str += " 없음"
+
         messages = [
             {
                 "role": "system",
-                "content": system_prompt
+                "content": system_prompt + products_str
             },
         ] + state["messages"]
 
-        response = await llm.with_structured_output(Router).ainvoke(messages)
-        next_ = response["next"]  # type: ignore
-        if next_ == "FINISH":
-            next_ = END
+        res = await llm.with_structured_output(Router).ainvoke(messages)
+        next_ = res["next"]  # type: ignore
 
-        return {"next": next_, "messages": []}
+        return {"next": next_}
 
     return supervisor_node
 
