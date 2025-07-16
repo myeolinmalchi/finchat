@@ -1,15 +1,21 @@
-from domains.saving.agents.graph_state import SavingGraphState
+from langgraph.graph import END
+from domains.common.agents.graph_state import GraphState
 
 
 def init_router_node():
 
-    async def node(state: SavingGraphState):
-        # 선택한 상품 수가 target_count개 이상일 때
-        if len(state.get("selected", [])) >= state["target_count"]:
-            state["next"] = "supervisor"
+    async def node(state: GraphState):
+        print("============ Saving Router Node ============")
+
+        selected = state.get("selected", [])
+
+        if selected and len(selected) >= state["target_count"]:
+            print(len(selected))
+            return {"next": END}
         else:
-            state["offset"] += 5
-            state["next"] = "tool_selector"
-        return state
+            return {
+                "next": "tool_selection_node",
+                "offset": state["offset"] + 5,
+            }
 
     return node
