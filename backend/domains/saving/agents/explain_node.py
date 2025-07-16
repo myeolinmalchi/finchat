@@ -35,6 +35,22 @@ def init_explain_node(llm: BaseChatModel):
 
             return {"next": END}
 
+        writer({
+            "chat_id": state["chat_id"],
+            "status": "response",
+            "content": {
+                "products": [{
+                    "name": p.product.name,
+                    "product_type": "saving",
+                    "options": p.product.format_interest_rates(),
+                    "institution": p.product.institution,
+                    "description": p.product.name,
+                    "details": str(p.product),
+                    "tags": [],
+                } for p in products]
+            }
+        })
+
         blob: str = "\n---\n".join(list(map(str, products)))
 
         prompt = prompt_template.invoke({
@@ -54,6 +70,11 @@ def init_explain_node(llm: BaseChatModel):
                     "message": chunk_content
                 }
             })
+
+        writer({
+            "chat_id": state["chat_id"],
+            "status": "stop",
+        })
 
         content = "".join(chunks)
 
