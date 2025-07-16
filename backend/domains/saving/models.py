@@ -146,6 +146,30 @@ class Saving(BaseModel):
     base_interest_rate: float | List[BaseInterestRateTier]
     preferential_rates: List[SavingPreferentialRate]
 
+    def format_interest_rates(self):
+
+        base_rate: float
+        if isinstance(self.base_interest_rate, float):
+            base_rate = self.base_interest_rate
+        else:
+            base_rate = max(tier.interest_rate for tier in self.base_interest_rate)
+
+        preferential_sum = 0.0
+        for pref in self.preferential_rates:
+            if len(pref.tiers) > 0:
+                tier_max = max(tier.interest_rate for tier in pref.tiers)
+                preferential_sum += tier_max
+
+        max_rate = base_rate + preferential_sum
+
+        return [{
+            "category": "기본",
+            "value": f"연 {base_rate:.2f}%"
+        }, {
+            "category": "최대",
+            "value": f"연 {max_rate:.2f}%"
+        }]
+
     def __str__(self) -> str:
 
         def format_term_policy(p: TermPolicy) -> str:
