@@ -66,32 +66,59 @@ def init_supervisor_node(llm: BaseChatModel):
     return supervisor_node
 
 
-def build_graph(db: AsyncIOMotorDatabase):
+def init_graph(
+    llm: BaseChatModel,
+    db: AsyncIOMotorDatabase,
+    target_count: int = 3,
+):
+    sg = StateGraph(GraphState)
 
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
-
-    supervisor_node = init_supervisor_node(llm)
+    llm_with_reasoning = ChatUpstage(
+        model="solar-pro2",
+        temperature=0.0,
+        reasoning_effort="high",
+        max_tokens=16384,
+    )
 
     saving_tools = init_saving_retrieval_tools(db.get_collection("savings"))
-    saving_node = init_saving_search_node(llm, saving_tools)
+    sg.add_node("saving_node", init_saving_subgraph(llm, saving_tools))
 
-    tavily_node = init_tavily_node(llm)
+    sg.add_node("research_node", init_research_node(llm))
+    sg.add_node("explain_node", init_explain_node(llm))
+    sg.add_node("supervisor", init_supervisor_node(llm_with_reasoning))
 
-    builder = StateGraph(AgentState)
-    builder.add_edge(START, "supervisor")
-    builder.add_node("supervisor", supervisor_node)
-    builder.add_node("saving_node", saving_node)
-    builder.add_node("search", tavily_node)
+    sg.add_edge("research_node", "supervisor")
+    sg.add_edge("saving_node", "supervisor")
+    sg.add_edge("explain_node", END)
 
-    for member in members:
-        builder.add_edge(member, "supervisor")
+    sg.add_conditional_edges("supervisor", lambda s: s["next"])
 
-    builder.add_conditional_edges("supervisor", lambda state: state["next"])
-    builder.add_edge(START, "supervisor")
+    sg.set_entry_point("supervisor")
 
-    graph = builder.compile()
+    graph = sg.compile()
 
-    return graph
+    async def stream_graph(user_msg: str, chat_id: str) -> AsyncIterator[dict]:
+        init_state: GraphState = {
+            "chat_id": chat_id,
+            "messages": [HumanMessage(content=user_msg)],
+            "tavily_results": None,
+            "candidates": [],
+            "selected": [],
+            "offset": 0,
+            "target_count": target_count,
+            "tool": None,
+            "next": None,
+        }
+        async for chunk in graph.astream(init_state,
+                                         stream_mode="custom",
+                                         subgraphs=True,
+                                         config={"recursion_limit": 100}):
+            yield chunk
+
+    return stream_graph
+
+
+import asyncio
 
 
 async def test(input: str):
