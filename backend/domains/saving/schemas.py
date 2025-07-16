@@ -58,10 +58,25 @@ class SavingSearchResult(BaseModel):
     mid_rate_rank: Optional[int] = None  # 중간금리 순위
     max_rate_rank: Optional[int] = None  # 최대 금리 순위
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, strict=False)
 
     def __init__(self, **data):
+        data["interest"] = int(data.get("interest", 0))
         super().__init__(product=Saving(**data), **data)
+
+    def __str__(self) -> str:
+
+        info = "\n".join([
+            f"총 이자: {self.interest or '-'}",
+            f"원금: {self.principal or '-'}",
+            f"기본금리 순위: {self.base_rate_rank or '-'}위",
+            f"최대금리 순위: {self.max_rate_rank or '-'}위",
+        ])
+
+        return ("### 상품 기본 정보\n"
+                f"{str(self.product)}\n\n"
+                "### 이율 정보\n"
+                f"{info}")
 
 
 class TotalSavingSearchResult(BaseModel):
