@@ -165,12 +165,14 @@ class Saving(BaseModel):
         def format_amount_policy(p: AmountPolicy) -> str:
             unit = unit_map(p.amount_unit or "month")
             if p.policy_type == "RANGE":
-                return f"{p.min_amount:,}원 이상" + (f" ~ {p.max_amount:,}원 이하" if
-                                                  p.max_amount else "") + f" / {unit}"
+                return f"{p.min_amount:,}원 이상" if p.min_amount else "" + (
+                    f" ~ {p.max_amount:,}원 이하" if p.max_amount else "") + f" / {unit}"
             if p.policy_type == "CHOICES":
                 choices = ", ".join(f"{c:,}원" for c in p.choices or [])
                 return f"선택 ({choices}) / {unit}"
             if p.policy_type == "FIXED_AMOUNT":
+                if not p.fixed_amount:
+                    return "-"
                 return f"{p.fixed_amount:,}원 고정 / {unit}"
             return ""
 
@@ -207,4 +209,3 @@ class Saving(BaseModel):
             format_pref_rates(self.preferential_rates) or "없음",
         ]
         return "\n".join(lines)
-
