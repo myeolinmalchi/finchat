@@ -25,8 +25,8 @@ def save_msg(chat_id: str, role: str, content_obj) -> None:
 def list_chats(offset: int, size: int):
     with get_conn() as conn:
         cur = conn.execute(
-            "SELECT chat_id, COALESCE(title, '제목 없음') AS title "
-            "FROM chats ORDER BY created_at DESC LIMIT ? OFFSET ?", (size, offset))
+            "SELECT chat_id, title, created_at, updated_at "
+            "FROM chats ORDER BY updated_at DESC LIMIT ? OFFSET ?", (size, offset))
         return [dict(r) for r in cur.fetchall()]
 
 
@@ -41,6 +41,6 @@ def get_history(chat_id: str, offset: int, size: int):
     with get_conn() as conn:
         cur = conn.execute(
             "SELECT role, content FROM messages "
-            "WHERE chat_id = ? ORDER BY ts ASC LIMIT ? OFFSET ?",
+            "WHERE chat_id = ? ORDER BY updated_at ASC LIMIT ? OFFSET ?",
             (chat_id, size, offset))
         return [dict(r) for r in cur.fetchall()]
