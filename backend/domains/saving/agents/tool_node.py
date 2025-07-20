@@ -14,7 +14,6 @@ system_prompt = """\
 
 
 def init_saving_tool_node(llm: BaseChatModel, tools: List[BaseTool]):
-    """Tool 및 파라미터 결정 노드"""
 
     agent_with_tools = llm.bind_tools(tools)
     tool_map: Dict[str, BaseTool] = {t.name: t for t in tools}
@@ -30,12 +29,15 @@ def init_saving_tool_node(llm: BaseChatModel, tools: List[BaseTool]):
             }
         })
 
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-        ] + state["messages"]
+        research_context = ""
+        if state.get("documents"):
+            research_context = "\n\n## 외부 참고 정보\n" + "\n".join(
+                f"- {getattr(d, 'page_content')}" for d in state["documents"][:5])
+
+        messages = [{
+            "role": "system",
+            "content": system_prompt + research_context
+        }] + state["messages"]
 
         res = await agent_with_tools.ainvoke(messages)
         tool_call = res.tool_calls[0]  # type: ignore
