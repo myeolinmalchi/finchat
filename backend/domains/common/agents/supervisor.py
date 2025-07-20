@@ -1,67 +1,80 @@
 import asyncio
-from pprint import pprint
-from typing import AsyncIterator, Literal, TypedDict
+from typing import AsyncIterator, List, TypedDict, cast
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai.chat_models.base import ChatOpenAI
 from langchain_upstage import ChatUpstage
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, StateGraph
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from common.database import init_mongodb_client
 from domains.common.agents.graph_state import GraphState
-from domains.common.agents.research_node import init_research_node
+from domains.common.agents.retrieval_subgraph.retrieval_node import init_retrieval_node, init_retrieval_subgraph
+from domains.common.agents.types import Members
 from domains.saving.agents.explain_node import init_explain_node
 from domains.saving.agents.saving_subgraph import init_saving_subgraph
 from domains.saving.agents.tool_factory import init_saving_retrieval_tools
 
-Members = Literal["explain_node", "saving_node", "research_node"]
-Options = Literal[Members, "END"]
+SUPERVISOR_SYSTEM_PROMPT = """\
+<Role>
+당신은 Supervisor Node로서 ‘적금 추천’ 전체 워크플로우를 계획하고 실행까지 조율한다.
+</Role>
 
-system_prompt = (
-    "You are a supervisor agent managing the following workers: "
-    f"{Members.__args__}. The user's main goal is to receive financial product recommendations "
-    "that fit their needs, regardless of the type of question they ask.\n\n"
-    "- 'saving_node': 사용자의 현재 상황과 요청 내용을 바탕으로 적합한 적금 상품을 검색하는 노드입니다.\n"
-    "- 'explain_node': 추천 상품 목록에 데이터가 존재하면 검색 결과에 대한 설명을 작성하고 워크플로우를 종료합니다.\n"
-    "- 'research_node': 금융 지식, 뉴스 기사, 정부 정책 등의 외부 지식을 보충하기 위해 사용합니다. **정보 검색을 위한 보조 수단으로만 사용합니다.**\n\n"
-)
+<Goal>
+1. 사용자의 요구·제약·데이터 부족 여부를 분석해 하위 노드 실행 순서를 3단계 이내로 결정
+   • 외부 정보 필요 ➜ research_node 포함
+   • 내부 DB만으로 충분 ➜ saving_node→explain_node
+2. JSON 형태로 {"plan":[...], "next":"..."} 반환
+</Goal>
 
-
-class Router(TypedDict):
-    next: Members
+<Output_Example>
+{
+  "plan": ["research_node", "saving_node", "explain_node"],
+  "next": "research_node"
+}
+</Output_Example>"""
 
 
 def init_supervisor_node(llm: BaseChatModel):
 
+    class SupervisorResponse(TypedDict):
+        plan: List[Members]
+        next: Members
+
     async def supervisor_node(state: GraphState):
         print("============ Supervisor Node ============")
 
-        products = state["selected"]
+        writer = get_stream_writer()
 
-        if products and len(products) >= state["target_count"]:
-            return {"next": "explain_node"}
+        # 1) 이미 계획이 있으면 다음 단계만 실행
+        if "plan" in state and state["current_step"] < len(state["plan"]):
+            next_ = state["plan"][state["current_step"]]
+            return {"next": next_, "current_step": state["current_step"] + 1}
 
-        products_str = "### 추천 상품 목록:"
-        if products:
-            products_str += "\n".join([
-                f"{idx}. {product.product.name}"
-                for idx, product in enumerate(products, 1)
-            ])
-        else:
-            products_str += " 없음"
+        writer({
+            "chat_id": state["chat_id"],
+            "status": "pending",
+            "content": {
+                "message": "리서치 계획을 수립하고 있습니다."
+            }
+        })
 
+        # 2) 최초 호출 → 계획 수립
         messages = [
             {
                 "role": "system",
-                "content": system_prompt + products_str
+                "content": SUPERVISOR_SYSTEM_PROMPT
             },
-        ] + state["messages"]
+            *state["messages"],
+        ]
+        result = cast(
+            SupervisorResponse, await
+            llm.with_structured_output(SupervisorResponse).ainvoke(messages))
 
-        res = await llm.with_structured_output(Router).ainvoke(messages)
-        next_ = res["next"]  # type: ignore
+        print(f"plan: {result['plan']}")
+        print(f"next: {result['next']}")
 
-        return {"next": next_}
+        return {"next": result["next"], "plan": result["plan"], "current_step": 1}
 
     return supervisor_node
 
@@ -75,16 +88,29 @@ def init_graph(
 
     llm_with_reasoning = ChatUpstage(
         model="solar-pro2",
-        temperature=0.0,
+        reasoning_effort="medium",
+        temperature=0.3,
+    )
+    """
+    llm_with_reasoning = ChatUpstage(
+        model="solar-pro2",
+        temperature=0.3,
         reasoning_effort="high",
         max_tokens=16384,
     )
+    """
 
     saving_tools = init_saving_retrieval_tools(db.get_collection("savings"))
     sg.add_node("saving_node", init_saving_subgraph(llm, saving_tools))
 
-    sg.add_node("research_node", init_research_node(llm))
+    _retrieval_subgraph = init_retrieval_subgraph()
+    _retrieval_node = init_retrieval_node(_retrieval_subgraph)
+
+    #sg.add_node("research_node", init_research_node(llm))
+    sg.add_node("research_node", _retrieval_node)
+
     sg.add_node("explain_node", init_explain_node(llm))
+
     sg.add_node("supervisor", init_supervisor_node(llm_with_reasoning))
 
     sg.add_edge("research_node", "supervisor")
@@ -101,13 +127,21 @@ def init_graph(
         init_state: GraphState = {
             "chat_id": chat_id,
             "messages": [HumanMessage(content=user_msg)],
-            "tavily_results": None,
+            "documents": [],
             "candidates": [],
             "selected": [],
             "offset": 0,
             "target_count": target_count,
-            "tool": None,
             "next": None,
+            "plan": [],
+            "current_step": 0,
+            "user_info": {
+                "나이": "27세",
+                "직업": "대학생",
+                "월 소득": "50만원",
+                "투자 성향": "안정적인 투자 선호",
+                "결혼 여부": "미혼, 자녀없음"
+            }
         }
         async for chunk in graph.astream(init_state,
                                          stream_mode="custom",
@@ -128,13 +162,13 @@ async def run(query: str):
         temperature=0.3,
     )
     """
+
     llm = ChatUpstage(
         model="solar-pro2",
-        temperature=0.0,
+        temperature=0.3,
         reasoning_effort="low",
         max_tokens=16384,
     )
-
     _, db = init_mongodb_client()
     run = init_graph(llm, db)
 
