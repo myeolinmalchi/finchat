@@ -46,7 +46,16 @@ async def raw2saving(raw: dict, client: AsyncOpenAI) -> Saving:
     tasks["term"] = asyncio.create_task(
         parse_term_policy(raw["product_guide"]["term"], client=client))
     tasks["amount"] = asyncio.create_task(
-        parse_amount_policy(raw["product_guide"]["term"], client=client))
+        parse_amount_policy(raw["product_guide"]["amount"], client=client))
+
+    def extract_percentages(text: str) -> float:
+        """XX.XX% -> XX.XX"""
+        pattern = r"(\d+(?:\.\d{1,2})?)%"
+        temp = re.findall(pattern, text)
+        if not temp:
+            raise ValueError(f"{text}를 숫자로 변환하지 못했습니다.")
+
+        return float(temp[0])
 
     if hasattr(raw["interest_rate_guide"], "interest_rate_per_terms"):
         html_table = raw["interest_rate_guide"]["interest_rate_per_terms"]
@@ -55,21 +64,20 @@ async def raw2saving(raw: dict, client: AsyncOpenAI) -> Saving:
 
     else:
 
-        def extract_percentages(text: str) -> float:
-            """XX.XX% -> XX.XX"""
-            pattern = r"(\d+(?:\.\d{1,2})?)%"
-            temp = re.findall(pattern, text)
-            if not temp:
-                raise ValueError(f"{text}를 숫자로 변환하지 못했습니다.")
-
-            return float(temp[0])
-
         raw_interest_rate: str = raw["basic_info"]["base_interest_rate"]
         data["base_interest_rate"] = extract_percentages(raw_interest_rate)
 
-    cond_text = "\n".join(raw["interest_rate_guide"]["conditions"])
-    tasks["preferential_rates"] = asyncio.create_task(
-        extract_saving_preferential_rates(client, cond_text))
+    data["max_interest_rate"] = extract_percentages(
+        raw["basic_info"]["max_interest_rate"])
+
+    if "conditions" in raw["interest_rate_guide"]:
+        conditions = raw["interest_rate_guide"]["conditions"]
+
+        _tasks = [
+            asyncio.create_task(extract_saving_preferential_rates(client, text))
+            for text in conditions
+        ]
+        tasks["preferential_rates"] = asyncio.gather(*_tasks)
 
     raw_interest_type = raw["interest_rate_guide"].get("interest_type", "고정금리")
     data["interest_type"] = "fixed" if raw_interest_type == "고정금리" else "variable"
@@ -79,15 +87,23 @@ async def raw2saving(raw: dict, client: AsyncOpenAI) -> Saving:
 
     data = {**data, **{key: await task for key, task in tasks.items()}}
 
+    if "preferential_rates" not in data:
+        data["preferential_rates"] = []
+
+    saving = Saving(**data)
+    print(f"\n====== {saving.name} ======")
+    print(f"최대 금리: {saving.format_interest_rates()}")
+    print(f"기본 금리: {saving.base_interest_rate}")
+
     return Saving(**data)
 
 
 UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 
-INPUT_PATH = Path("data/savings.jsonl")
+INPUT_PATH = Path("savings.jsonl")
 OUTPUT_PATH = Path("data/savings_parsed.jsonl")
 MODEL = "solar-pro"
-MAX_CONCURRENCY = 5
+MAX_CONCURRENCY = 1
 
 
 async def parse_raw_datas(openai_client: AsyncOpenAI):
@@ -117,12 +133,15 @@ async def parse_raw_datas(openai_client: AsyncOpenAI):
             json_str = saving.model_dump_json()
             fp.write(json_str + "\n")
 
+    return savings
 
-async def insert_datas(saving_collection: AsyncIOMotorCollection,):
+
+async def insert_datas(saving_collection: AsyncIOMotorCollection,
+                       savings: List[Saving]):
 
     result = await saving_collection.delete_many({})
     print(f"Deleted {result.deleted_count} documents.")
-
+    """
     raw_datas: List[str] = []
     with open(OUTPUT_PATH, "r", encoding="utf-8") as fp:
         for line in fp:
@@ -133,21 +152,30 @@ async def insert_datas(saving_collection: AsyncIOMotorCollection,):
         return Saving(**raw)
 
     savings: List[Saving] = list(map(convert, raw_datas))
+    """
     result = await insert_savings(saving_collection, savings)
 
     print(f"{len(result['ids'])} rows added")
 
 
-if __name__ == "__main__":
+async def run():
+
     uvloop.install()
 
-    client, database = init_mongodb_client()
+    _, database = init_mongodb_client()
 
     openai_client = AsyncOpenAI(
         api_key=UPSTAGE_API_KEY,
         base_url="https://api.upstage.ai/v1",
     )
 
-    #asyncio.run(parse_raw_datas(openai_client))
+    savings = await parse_raw_datas(openai_client)
     saving_collection = database.get_collection("savings")
-    asyncio.run(insert_datas(saving_collection))
+    result = await insert_datas(saving_collection, savings)
+
+    print(result)
+
+
+if __name__ == "__main__":
+
+    asyncio.run(run())

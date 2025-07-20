@@ -84,11 +84,11 @@ def parse_basic_info(soup: BeautifulSoup):
 
     base_interest_rate_element = main_info_element.select(
         'dd[class^="MainInfo_rate"]')[-1]
-
-    if not base_interest_rate_element:
-        raise ValueError("기본 금리 정보가 존재하지 않습니다.")
+    max_interest_rate_element = main_info_element.select(
+        'dd[class^="MainInfo_rate"]')[0]
 
     data["base_interest_rate"] = base_interest_rate_element.get_text(strip=True)
+    data["max_interest_rate"] = max_interest_rate_element.get_text(strip=True)
 
     return data
 
@@ -114,39 +114,51 @@ def parse_interest_rate_guide(soup: BeautifulSoup):
 
         data["interest_rate_per_terms"] = str(table.prettify())
 
-    # 조건별 금리 엘리먼트
-    per_conditions_element = product_guide_element.select_one(
+    # 금리 안내 섹션의 텍스트 엘리먼트
+    interests_text_elements = product_guide_element.select(
         '[class^="InterestRateGuide_area-text-info"]')
 
-    if per_conditions_element:
+    for element in interests_text_elements:
 
-        items = per_conditions_element.select('[class^="TextList_item"]')
+        label_element = element.select_one('[class^="TextList_label"]')
+        if not label_element:
+            continue
 
-        conditions: List[str] = []
+        label_text = label_element.get_text(strip=True)
 
-        for item in items:
+        if label_text == "조건별":
 
-            dt = item.select_one("dt")
-            dd = item.select_one("dd")
+            items = element.select('[class^="TextList_item"]')
 
-            if not dt or not dd:
-                raise ValueError("우대금리 조건에 대한 설명이 없습니다.")
+            conditions: List[str] = []
 
-            if "조건별" in dt.text:
-                data["description"] = dd.get_text(strip=True)
-                continue
+            for item in items:
 
-            if "유형" in dt.text:
-                data["interest_type"] = dd.get_text(strip=True)
-                continue
+                dt = item.select_one("dt")
+                dd = item.select_one("dd")
 
-            condition_element = dd.select_one("ul")
-            if not condition_element:
-                continue
+                if not dt or not dd:
+                    raise ValueError("우대금리 조건에 대한 설명이 없습니다.")
 
-            conditions.append(condition_element.get_text(strip=True))
+                list_element = dd.select_one("ul > li")
+                p_element = dd.select_one("p")
 
-        data["conditions"] = conditions
+                if not list_element and p_element:
+                    data["description"] = dd.get_text(strip=True)
+                    continue
+
+                if not list_element and not p_element:
+                    data["interest_type"] = dd.get_text(strip=True)
+                    continue
+
+                condition_element = dd.select_one("ul")
+                if not condition_element:
+                    continue
+
+                conditions.append(condition_element.get_text(strip=True,
+                                                             separator="\n"))
+
+            data["conditions"] = conditions
 
     return data
 
