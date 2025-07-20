@@ -15,6 +15,27 @@ from domains.saving.agents.prompts import (SAVING_ANALYSIS_SYSTEM_PROMPT,
 import asyncio
 
 
+def _parse_saving_analysis(response: str):
+    out = {"thought": None, "answer": None, "valid": False}
+
+    thought_m = re.search(r"<Thought>(.*?)</Thought>", response, re.I | re.S)
+    answer_m = re.search(r"<Answer>(.*?)</Answer>", response, re.I | re.S)
+
+    if thought_m:
+        out["thought"] = thought_m.group(1).strip()
+
+    if answer_m:
+        ans_raw = answer_m.group(1).strip()
+        ans_pick = re.search(r"(적합|부적합)", ans_raw)
+        if ans_pick:
+            out["answer"] = ans_pick.group(1)
+
+    if "부적합" not in out.get("answer", ""):
+        out["valid"] = True
+
+    return out
+
+
 async def _evaluate_product_fit(
     llm: BaseChatModel,
     product: ProductSearchResult,
@@ -39,13 +60,11 @@ async def _evaluate_product_fit(
         case ChatUpstage(model="solar-pro2"):
             result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL)
 
-    if result == "부적합":
-        return False
-    if result == "적함":
-        return True
-    if "부적합" in result:
-        return False
-    return True
+    parsed = _parse_saving_analysis(result)
+
+    print(parsed["answer"], parsed["valid"])
+
+    return parsed["valid"]
 
 
 def init_filter_node(llm: BaseChatModel):
@@ -69,6 +88,8 @@ def init_filter_node(llm: BaseChatModel):
                 } for p in products]
             }
         })
+
+        print(len(products))
 
         eval_result = await asyncio.gather(
             *[_evaluate_product_fit(llm, product, state) for product in products])
