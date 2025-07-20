@@ -146,6 +146,8 @@ class Saving(BaseModel):
     base_interest_rate: float | List[BaseInterestRateTier]
     preferential_rates: List[SavingPreferentialRate]
 
+    max_interest_rate: float
+
     def format_interest_rates(self):
 
         base_rate: float
@@ -153,7 +155,7 @@ class Saving(BaseModel):
             base_rate = self.base_interest_rate
         else:
             base_rate = max(tier.interest_rate for tier in self.base_interest_rate)
-
+        """
         preferential_sum = 0.0
         for pref in self.preferential_rates:
             if len(pref.tiers) > 0:
@@ -161,6 +163,9 @@ class Saving(BaseModel):
                 preferential_sum += tier_max
 
         max_rate = base_rate + preferential_sum
+        """
+
+        max_rate = self.max_interest_rate
 
         return [{
             "category": "기본",
@@ -183,7 +188,7 @@ class Saving(BaseModel):
                 choices = ", ".join(f"{c}{unit}" for c in p.choices or [])
                 return f"선택 ({choices})"
             if p.policy_type == "FIXED_DATE":
-                return f"{p.maturity_date:%Y년 %m월 %d일} 만기"
+                return f"{p.maturity_date:%Y년 %m월 %d일} 만기" if p.maturity_date else "-"
             return ""
 
         def format_amount_policy(p: AmountPolicy) -> str:
@@ -221,15 +226,16 @@ class Saving(BaseModel):
             return "\n".join(lines)
 
         lines = [
-            f"상품명: {self.name}",
-            f"기관: {self.institution}",
-            f"대상: {self.targets}",
-            f"특판: {self.event or '없음'}",
-            f"가입 기간: {format_term_policy(self.term)}",
-            f"납입 금액: {format_amount_policy(self.amount)}",
-            f"금리 유형: {saving_interest_type_map[self.interest_type]}, 적립 방식: {saving_earn_method_map[self.earn_method]}",
-            f"기본 금리: {format_base_rate(self.base_interest_rate)}",
-            "우대 금리:",
+            f"- **상품명**: {self.name}",
+            f"- **기관**: {self.institution}",
+            f"- **대상**: {self.targets}",
+            f"- **특판**: {self.event or '없음'}",
+            f"- **가입 기간**: {format_term_policy(self.term)}",
+            f"- **납입 금액**: {format_amount_policy(self.amount)}",
+            f"- **금리 유형**: {saving_interest_type_map[self.interest_type]}",
+            f"- **적립 방식**: {saving_earn_method_map[self.earn_method]}",
+            f"- **기본 금리**: {format_base_rate(self.base_interest_rate)}",
+            "- **우대 금리**:",
             format_pref_rates(self.preferential_rates) or "없음",
         ]
         return "\n".join(lines)
