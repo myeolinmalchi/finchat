@@ -14,7 +14,7 @@ def init_router_node():
             return {"next": END}
         else:
             return {
-                "next": "tool_selection_node",
+                "next": "tool_node",
                 "offset": state["offset"] + 5,
             }
 
