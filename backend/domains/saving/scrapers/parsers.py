@@ -22,108 +22,115 @@ UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 @retry_async(times=10, delay=1)
 async def _parse_term_policy_llm(text: str, client: AsyncOpenAI) -> TermPolicy:
 
-    schema = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "term_policy",
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "policy_type": {
-                        "type": "string",
-                        "enum": ["RANGE", "FIXED_DURATION", "CHOICES", "FIXED_DATE"],
-                        "description": "기간 정책 유형"
-                    },
-                    "min_term": {
-                        "type": "integer",
-                        "description": "최소 가입 기간"
-                    },
-                    "max_term": {
-                        "type": "integer",
-                        "description": "최대 가입 기간"
-                    },
-                    "choices": {
-                        "type": "array",
-                        "items": {
-                            "type": "integer",
-                            "description": "선택 가능한 가입 기간"
+    try:
+
+        schema = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "term_policy",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "policy_type": {
+                            "type": "string",
+                            "enum": [
+                                "RANGE", "FIXED_DURATION", "CHOICES", "FIXED_DATE"
+                            ],
+                            "description": "기간 정책 유형"
                         },
-                        "description": "가입 기간 선택지 목록"
+                        "min_term": {
+                            "type": "integer",
+                            "description": "최소 가입 기간"
+                        },
+                        "max_term": {
+                            "type": "integer",
+                            "description": "최대 가입 기간"
+                        },
+                        "choices": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer",
+                                "description": "선택 가능한 가입 기간"
+                            },
+                            "description": "가입 기간 선택지 목록"
+                        },
+                        "term_unit": {
+                            "type": "string",
+                            "enum": ["day", "month", "year"],
+                            "description": "가입 기간 단위"
+                        },
+                        "maturity_date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "만기일(고정형 상품)"
+                        }
                     },
-                    "term_unit": {
-                        "type": "string",
-                        "enum": ["day", "month", "year"],
-                        "description": "가입 기간 단위"
-                    },
-                    "maturity_date": {
-                        "type": "string",
-                        "format": "date",
-                        "description": "만기일(고정형 상품)"
-                    }
-                },
-                "required": ["policy_type"]
+                    "required": ["policy_type"]
+                }
             }
         }
-    }
 
-    SYSTEM_PROMPT = """\
-    당신의 역할은 입력받은 한국어 금융상품 설명 문장에서 "가입 기간 정책(TermPolicy)" 정보를 **JSON 객체**로만 추출하여 반환하는 것이다.  
-    반환 결과는 아래 JSON Schema를 반드시 충족해야 하며, 추가·누락된 키가 존재해서는 안 된다.
+        SYSTEM_PROMPT = """\
+        당신의 역할은 입력받은 한국어 금융상품 설명 문장에서 "가입 기간 정책(TermPolicy)" 정보를 **JSON 객체**로만 추출하여 반환하는 것이다.  
+        반환 결과는 아래 JSON Schema를 반드시 충족해야 하며, 추가·누락된 키가 존재해서는 안 된다.
 
-    - JSON Schema
-    {
-      "policy_type": "RANGE | FIXED_DURATION | CHOICES | FIXED_DATE",   // 필수
-      "min_term":     integer,   // RANGE, FIXED_DURATION
-      "max_term":     integer,   // RANGE, FIXED_DURATION
-      "choices":      integer[], // CHOICES
-      "term_unit":    "day | month | year",   // RANGE, FIXED_DURATION, CHOICES
-      "maturity_date":"YYYY-MM-DD"            // FIXED_DATE
-    }
-
-    - 조건 (policy_type에 따른 필수·금지 필드)
-    1. **RANGE**  
-       - 반드시 `min_term`, `max_term`, `term_unit`을 포함하고 `choices`, `maturity_date`는 넣지 않는다.
-    2. **FIXED_DURATION**  
-       - 하나의 고정 기간이라도 `min_term` · `max_term` · `term_unit`을 모두 채운다  
-         (예: 12개월 상품 → min_term = max_term = 12, term_unit = "month").
-    3. **CHOICES**  
-       - `choices` 배열과 `term_unit`만 포함한다.  
-       - `min_term`, `max_term`, `maturity_date`는 포함하지 않는다.
-    4. **FIXED_DATE**  
-       - 오직 `maturity_date`만 포함한다(예: "2026-01-11").  
-       - 다른 기간 관련 필드는 넣지 않는다.
-
-    - 공통 규칙
-        - 모든 숫자는 정수로, 단위(개월·일·년)는 제외하고 적는다.
-        - `term_unit` 값은 반드시 소문자로(day, month, year 중 하나).
-        - ISO 8601 형식(YYYY-MM-DD) 외 날짜 표현은 사용하지 않는다.
-    """
-
-    messages = [
+        - JSON Schema
         {
-            "role": "system",
-            "content": SYSTEM_PROMPT
-        },
-        {
-            "role": "user",
-            "content": text
-        },
-    ]
+          "policy_type": "RANGE | FIXED_DURATION | CHOICES | FIXED_DATE",   // 필수
+          "min_term":     integer,   // RANGE, FIXED_DURATION
+          "max_term":     integer,   // RANGE, FIXED_DURATION
+          "choices":      integer[], // CHOICES
+          "term_unit":    "day | month | year",   // RANGE, FIXED_DURATION, CHOICES
+          "maturity_date":"YYYY-MM-DD"            // FIXED_DATE
+        }
 
-    response = await client.chat.completions.create(
-        model="solar-pro",
-        messages=messages,  # type: ignore
-        response_format=schema,  # type: ignore
-        max_tokens=8192,
-    )
+        - 조건 (policy_type에 따른 필수·금지 필드)
+        1. **RANGE**  
+           - 반드시 `min_term`, `max_term`, `term_unit`을 포함하고 `choices`, `maturity_date`는 넣지 않는다.
+        2. **FIXED_DURATION**  
+           - 하나의 고정 기간이라도 `min_term` · `max_term` · `term_unit`을 모두 채운다  
+             (예: 12개월 상품 → min_term = max_term = 12, term_unit = "month").
+        3. **CHOICES**  
+           - `choices` 배열과 `term_unit`만 포함한다.  
+           - `min_term`, `max_term`, `maturity_date`는 포함하지 않는다.
+        4. **FIXED_DATE**  
+           - 오직 `maturity_date`만 포함한다(예: "2026-01-11").  
+           - 다른 기간 관련 필드는 넣지 않는다.
 
-    content = response.choices[0].message.content
+        - 공통 규칙
+            - 모든 숫자는 정수로, 단위(개월·일·년)는 제외하고 적는다.
+            - `term_unit` 값은 반드시 소문자로(day, month, year 중 하나).
+            - ISO 8601 형식(YYYY-MM-DD) 외 날짜 표현은 사용하지 않는다.
+        """
 
-    if not content:
-        raise ValueError("올바르지 않은 값입니다.")
+        messages = [
+            {
+                "role": "system",
+                "content": SYSTEM_PROMPT
+            },
+            {
+                "role": "user",
+                "content": text
+            },
+        ]
 
-    data = json.loads(content)
+        response = await client.chat.completions.create(
+            model="solar-pro",
+            messages=messages,  # type: ignore
+            response_format=schema,  # type: ignore
+            max_tokens=16384,
+        )
+
+        content = response.choices[0].message.content
+
+        if not content:
+            raise ValueError("올바르지 않은 값입니다.")
+
+        data = json.loads(content)
+    except Exception as e:
+        print(f"기간 정책 추출 중 오류 발생: ", text)
+        raise e
 
     return TermPolicy(**data)
 
@@ -302,10 +309,10 @@ async def _parse_amount_policy_llm(text: str, client: AsyncOpenAI) -> AmountPoli
     ]
 
     response = await client.chat.completions.create(
-        model="solar-pro",
+        model="solar-pro2",
         messages=messages,  # type: ignore
         response_format=schema,  # type: ignore
-        max_tokens=8192,
+        max_tokens=16384,
     )
 
     content = response.choices[0].message.content
