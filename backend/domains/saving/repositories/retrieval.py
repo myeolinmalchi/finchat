@@ -5,436 +5,350 @@ from common.database import init_mongodb_client
 from domains.saving.schemas import (
     SavingRateWeights,
     SavingSearchResult,
-    TotalSavingSearchResult,
 )
 
-import math
 
+def build_search_pipeline(
+        *,
+        total_term_months: Optional[int] = None,  # 가입 기간(월)
+        monthly_deposit: Optional[int] = None,  # 월 납입 금액
+        target_amount: Optional[int] = None,  # 목표 금액
+        top_k: int = 5,
+        offset: int = 0,
+        w_base: float = 0.5,  # 기본금리 가중치
+        w_max: float = 0.5  # 최대금리 가중치
+):
+    """
+    SavingSearchResult 형태로 반환하기 위한 MongoDB aggregation 파이프라인을 생성한다.
+    세 파라미터 중 **정확히 두 개**만 입력해야 한다.
+    """
 
-def _create_score_pipeline(total_term_months: int, weights: SavingRateWeights):
-    """적금 상품 score 계산 파이프라인"""
+    print(f"w_base: {w_base}, w_max: {w_max}")
 
-    pipeline = []
+    # --- 0) 파라미터 검증 ---------------------------------------------------
+    supplied = [
+        total_term_months is not None, monthly_deposit is not None, target_amount
+        is not None
+    ]
+    if supplied.count(True) != 2:
+        raise ValueError("세 파라미터 중 정확히 두 개만 지정해야 합니다.")
 
-    base_interest_filter = {
-        "$let": {
-            "vars": {
-                "tier": {
-                    "$first": {
-                        "$filter": {
-                            "input": "$base_interest_rate",
-                            "as": "t",
-                            "cond": {
-                                "$and": [{
-                                    "$lte": ["$$t.min_term", total_term_months]
-                                }, {
-                                    "$or": [{
-                                        "$eq": ["$$t.max_term", None]
-                                    }, {
-                                        "$gt": ["$$t.max_term", total_term_months]
-                                    }]
-                                }]
-                            }
+    # 파라미터를 $literal 로 감싸야 파이프라인 안에서 사용 가능
+    lt = lambda v: {"$literal": v} if v is not None else v
+
+    # --- 1) 기본 금리(baseRate) 추출(가입 기간 반영) -------------------------
+    base_rate_stage = {
+        "$set": {
+            "baseRate": {
+                "$cond": [
+                    {
+                        "$isArray": "$base_interest_rate"
+                    },
+                    {
+                        "$let": {
+                            "vars": {
+                                "tier": {
+                                    "$first": {
+                                        "$filter": {
+                                            "input": "$base_interest_rate",
+                                            "as": "t",
+                                            "cond": {
+                                                "$and": [
+                                                    # min_term ≤ term_months
+                                                    {
+                                                        "$lte": [
+                                                            "$$t.min_term",
+                                                            lt(total_term_months) or
+                                                            "$_termMonths"
+                                                        ]
+                                                    },
+                                                    # term_months < max_term  (또는 max_term 없음)
+                                                    {
+                                                        "$or": [{
+                                                            "$eq": [
+                                                                "$$t.max_term", None
+                                                            ]
+                                                        }, {
+                                                            "$gt": [
+                                                                "$$t.max_term",
+                                                                lt(total_term_months) or
+                                                                "$_termMonths"
+                                                            ]
+                                                        }]
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "in": "$$tier.interest_rate"
                         }
+                    },
+                    "$base_interest_rate"
+                ]
+            }
+        }
+    }
+
+    # --- 2) 모자란 파라미터 보간 ------------------------------------------
+    #
+    #  · term_months가 None  →  ceil(goal_amount / monthly_amount)
+    #  · monthly_amount가 None → ceil(goal_amount / term_months)
+    #  · goal_amount가 None  →  monthly_amount * term_months
+    #
+    fill_stage = {"$set": {}}
+
+    if total_term_months is None:
+        fill_stage["$set"]["_termMonths"] = {
+            "$ceil": {
+                "$divide": [lt(target_amount), lt(monthly_deposit)]
+            }
+        }
+        fill_stage["$set"]["_monthlyAmount"] = lt(monthly_deposit)
+        fill_stage["$set"]["_goalAmount"] = lt(target_amount)
+
+    elif monthly_deposit is None:
+        fill_stage["$set"]["_termMonths"] = lt(total_term_months)
+        fill_stage["$set"]["_monthlyAmount"] = {
+            "$ceil": {
+                "$divide": [lt(target_amount), lt(total_term_months)]
+            }
+        }
+        fill_stage["$set"]["_goalAmount"] = lt(target_amount)
+
+    else:  # goal_amount is None
+        fill_stage["$set"]["_termMonths"] = lt(total_term_months)
+        fill_stage["$set"]["_monthlyAmount"] = lt(monthly_deposit)
+        fill_stage["$set"]["_goalAmount"] = {
+            "$multiply": [lt(monthly_deposit),
+                          lt(total_term_months)]
+        }
+    # --- 2.5) 가입 기간 및 납입 금액 필터링 -------------------------------
+    term_expr = {
+        "$or": [
+            # RANGE 또는 FIXED_DURATION
+            {
+                "$and": [{
+                    "$in": ["$term.policy_type", ["RANGE", "FIXED_DURATION"]]
+                }, {
+                    "$gte": ["$_termMonths", "$term.min_term"]
+                }, {
+                    "$or": [{
+                        "$eq": ["$term.max_term", None]
+                    }, {
+                        "$lte": ["$_termMonths", "$term.max_term"]
+                    }]
+                }]
+            },
+            # CHOICES (배열인지 확인 후에만 $in)
+            {
+                "$and": [{
+                    "$eq": ["$term.policy_type", "CHOICES"]
+                }, {
+                    "$isArray": "$term.choices"
+                }, {
+                    "$in": ["$_termMonths", "$term.choices"]
+                }]
+            },
+            # FIXED_DATE
+            {
+                "$eq": ["$term.policy_type", "FIXED_DATE"]
+            }
+        ]
+    }
+
+    # --- 납입 금액(amount) 필터 조건 정의 -------------------------------
+    amount_expr = {
+        "$or": [
+            # RANGE
+            {
+                "$and": [{
+                    "$eq": ["$amount.policy_type", "RANGE"]
+                }, {
+                    "$gte": ["$_monthlyAmount", "$amount.min_amount"]
+                }, {
+                    "$or": [{
+                        "$eq": ["$amount.max_amount", None]
+                    }, {
+                        "$lte": ["$_monthlyAmount", "$amount.max_amount"]
+                    }]
+                }]
+            },
+            # CHOICES (배열인지 확인 후에만 $in)
+            {
+                "$and": [{
+                    "$eq": ["$amount.policy_type", "CHOICES"]
+                }, {
+                    "$isArray": "$amount.choices"
+                }, {
+                    "$in": ["$_monthlyAmount", "$amount.choices"]
+                }]
+            },
+            # FIXED_AMOUNT
+            {
+                "$and": [{
+                    "$eq": ["$amount.policy_type", "FIXED_AMOUNT"]
+                }, {
+                    "$eq": ["$_monthlyAmount", "$amount.fixed_amount"]
+                }]
+            }
+        ]
+    }
+    filter_stage = {"$match": {"$expr": {"$and": [term_expr, amount_expr]}}}
+
+    # --- 3) 원금·이자 계산 --------------------------------------------------
+    calc_fin_stage = {
+        "$addFields": {
+            "principal": {
+                "$multiply": ["$_monthlyAmount", "$_termMonths"]
+            },
+        }
+    }
+
+    calc_interest_stage = {
+        "$addFields": {
+            "interest": {
+                "$divide": [{
+                    "$multiply": [
+                        "$principal", {
+                            "$ifNull": ["$baseRate", 0]
+                        }, {
+                            "$divide": ["$_termMonths", 12]
+                        }
+                    ]
+                }, 100]
+            }
+        }
+    }
+
+    # --- 4) 금리 정규화·가중합 점수 ----------------------------------------
+    stats_facet = {
+        "$facet": {
+            "stats": [{
+                "$group": {
+                    "_id": 0,
+                    "minBase": {
+                        "$min": "$baseRate"
+                    },
+                    "maxBase": {
+                        "$max": "$baseRate"
+                    },
+                    "minMax": {
+                        "$min": "$max_interest_rate"
+                    },
+                    "maxMax": {
+                        "$max": "$max_interest_rate"
                     }
                 }
-            },
-            "in": "$$tier.interest_rate"
+            }],
+            "docs": [{
+                "$match": {}
+            }]
         }
     }
 
-    # 기본금리
-    base_interest_rate = {
-        "baseInterestRate": {
-            "$cond": {
-                "if": {
-                    "$eq": [{
-                        "$type": "$base_interest_rate"
-                    }, "array"]
-                },
-                "then": base_interest_filter,
-                "else": "$base_interest_rate"
-            }
-        }
-    }
-
-    # user_choice 우대금리 합
-    total_user_choice_preferential_rate = {
-        "totalUserChoicePreferentialRate": {
-            "$sum": {
-                "$map": {
-                    "input": {
-                        "$filter": {
-                            "input": "$preferential_rates",
-                            "as": "pr",
-                            "cond": {
-                                "$eq": ["$$pr.rate_type", "user_choice"]
-                            },
-                        }
-                    },
-                    "as": "uc",
-                    "in": {
-                        "$reduce": {
-                            "input": "$$uc.tiers",
-                            "initialValue": 0,
-                            "in": {
-                                "$cond": [
-                                    {
-                                        "$gt": ["$$this.interest_rate", "$$value"]
-                                    },
-                                    "$$this.interest_rate",
-                                    "$$value",
-                                ]
-                            },
-                        }
-                    },
-                }
-            }
-        }
-    }
-
-    # 전체 우대금리 합
-    total_preferential_rate = {
-        "totalPreferentialRate": {
-            "$sum": {
-                "$map": {
-                    "input": "$preferential_rates",
-                    "as": "pr",
-                    "in": {
-                        "$reduce": {
-                            "input": "$$pr.tiers",
-                            "initialValue": 0,
-                            "in": {
-                                "$cond": [
-                                    {
-                                        "$gt": ["$$this.interest_rate", "$$value"]
-                                    },
-                                    "$$this.interest_rate",
-                                    "$$value",
-                                ]
-                            },
-                        }
-                    },
-                }
-            }
-        }
-    }
-
-    pipeline += [{
-        "$addFields": base_interest_rate
+    unwind_stats = [{
+        "$unwind": "$stats"
     }, {
-        "$addFields": {
-            **total_preferential_rate,
-            **total_user_choice_preferential_rate
+        "$unwind": "$docs"
+    }, {
+        "$replaceRoot": {
+            "newRoot": {
+                "$mergeObjects": ["$stats", "$docs"]
+            }
         }
     }]
 
-    pipeline.append({
+    norm = {
         "$addFields": {
-            "maxPreferentialRate": {
-                "$add": ["$baseInterestRate", "$totalPreferentialRate"]
+            "normBase": {
+                "$cond": [{
+                    "$eq": ["$maxBase", "$minBase"]
+                }, 0, {
+                    "$divide": [{
+                        "$subtract": ["$baseRate", "$minBase"]
+                    }, {
+                        "$subtract": ["$maxBase", "$minBase"]
+                    }]
+                }]
             },
-            "midPreferentialRate": {
-                "$add": ["$baseInterestRate", "$totalUserChoicePreferentialRate"]
-            },
-            "score": {
-                "$add": [{
-                    "$multiply": ["$baseInterestRate", weights.base]
-                }, {
-                    "$multiply": [{
-                        "$add": ["$baseInterestRate", "$totalPreferentialRate"]
-                    }, weights.max]
-                }, {
-                    "$multiply": [{
-                        "$add": [
-                            "$baseInterestRate", "$totalUserChoicePreferentialRate"
-                        ]
-                    }, weights.intermediate]
+            "normMax": {
+                "$cond": [{
+                    "$eq": ["$maxMax", "$minMax"]
+                }, 0, {
+                    "$divide": [{
+                        "$subtract": ["$max_interest_rate", "$minMax"]
+                    }, {
+                        "$subtract": ["$maxMax", "$minMax"]
+                    }]
                 }]
             },
         }
-    })
+    }
 
-    pipeline.append({"$sort": {"score": -1}})
-
-    return pipeline
-
-
-def build_pipeline(
-    weights: SavingRateWeights,
-    target_amount: Optional[int] = None,
-    monthly_deposit: Optional[int] = None,
-    total_term_months: Optional[int] = None,
-    top_k: int = 5,
-    offset: int = 0,
-):
-
-    base_pipeline = _create_score_pipeline(
-        total_term_months=total_term_months or 0,
-        weights=weights,
-    )
-
-    extra = []
-
-    # (1) 목표금액 + 월납입액 → 기간 계산 & 기간 정책 필터
-    if target_amount is not None and monthly_deposit is not None:
-        extra += [
-            {
-                "$addFields": {
-                    "calcTermMonths": math.ceil(target_amount / monthly_deposit)
-                }
-            },
-            {
-                "$match": {
-                    "$expr": {
-                        "$switch": {
-                            "branches": [
-                                # RANGE
-                                {
-                                    "case": {
-                                        "$eq": ["$term.policy_type", "RANGE"]
-                                    },
-                                    "then": {
-                                        "$and": [
-                                            {
-                                                "$lte": [
-                                                    "$term.min_term", "$calcTermMonths"
-                                                ]
-                                            },
-                                            {
-                                                "$or": [
-                                                    {
-                                                        "$eq": ["$term.max_term", None]
-                                                    },
-                                                    {
-                                                        "$gte": [
-                                                            "$term.max_term",
-                                                            "$calcTermMonths"
-                                                        ]
-                                                    },
-                                                ]
-                                            },
-                                        ]
-                                    },
-                                },
-                                # CHOICES
-                                {
-                                    "case": {
-                                        "$eq": ["$term.policy_type", "CHOICES"]
-                                    },
-                                    "then": {
-                                        "$in": [
-                                            "$calcTermMonths",
-                                            {
-                                                "$ifNull": ["$term.choices", []]
-                                            },
-                                        ]
-                                    },
-                                },
-                                # FIXED_DURATION
-                                {
-                                    "case": {
-                                        "$eq": ["$term.policy_type", "FIXED_DURATION"]
-                                    },
-                                    "then": {
-                                        "$eq": ["$term.min_term", "$calcTermMonths"],
-                                    },
-                                },
-                            ],
-                            "default": True,
-                        }
-                    }
-                }
-            },
-        ]
-
-    # (2) 목표금액 + 기간 → 월납입액 계산 & 금액 정책 필터
-    if target_amount is not None and total_term_months is not None:
-        extra += [
-            {
-                "$addFields": {
-                    "calcMonthlyDeposit": math.ceil(target_amount / total_term_months)
-                }
-            },
-            {
-                "$match": {
-                    "$expr": {
-                        "$switch": {
-                            "branches": [
-                                # RANGE
-                                {
-                                    "case": {
-                                        "$eq": ["$amount.policy_type", "RANGE"]
-                                    },
-                                    "then": {
-                                        "$and": [
-                                            {
-                                                "$lte": [
-                                                    "$amount.min_amount",
-                                                    "$calcMonthlyDeposit"
-                                                ]
-                                            },
-                                            {
-                                                "$or": [
-                                                    {
-                                                        "$eq": [
-                                                            "$amount.max_amount", None
-                                                        ]
-                                                    },
-                                                    {
-                                                        "$gte": [
-                                                            "$amount.max_amount",
-                                                            "$calcMonthlyDeposit"
-                                                        ]
-                                                    },
-                                                ]
-                                            },
-                                        ]
-                                    },
-                                },
-                                # CHOICES
-                                {
-                                    "case": {
-                                        "$eq": ["$amount.policy_type", "CHOICES"]
-                                    },
-                                    "then": {
-                                        "$in": [
-                                            "$calcMonthlyDeposit",
-                                            {
-                                                "$ifNull": ["$amount.choices", []]
-                                            },
-                                        ]
-                                    },
-                                },
-                                # FIXED_AMOUNT
-                                {
-                                    "case": {
-                                        "$eq": ["$amount.policy_type", "FIXED_AMOUNT"]
-                                    },
-                                    "then": {
-                                        "$eq": [
-                                            "$amount.fixed_amount",
-                                            "$calcMonthlyDeposit"
-                                        ]
-                                    },
-                                },
-                            ],
-                            "default": True,
-                        }
-                    }
-                }
-            },
-        ]
-
-    # (3) 월납입액 + 기간 → 만기 금액 시뮬레이션
-    if monthly_deposit is not None and total_term_months is not None:
-        extra += [
-            {
-                "$addFields": {
-                    "principal": {
-                        "$multiply": [monthly_deposit, total_term_months]
-                    },
-                    "interest": {
-                        "$multiply": [
-                            {
-                                "$divide": [
-                                    {
-                                        "$multiply": [
-                                            monthly_deposit,
-                                            {
-                                                "$add": [total_term_months, 1]
-                                            },
-                                            total_term_months,
-                                        ]
-                                    },
-                                    24,
-                                ]
-                            },
-                            {
-                                "$divide": ["$maxPreferentialRate", 100]
-                            },
-                        ]
-                    },
-                }
-            },
-            {
-                "$addFields": {
-                    "maturityAmount": {
-                        "$add": ["$principal", "$interest"]
-                    }
-                }
-            },
-        ]
-
-    if monthly_deposit is not None and total_term_months is not None:
-        extra += [
-            {
-                "$addFields": {
-                    "principal": {
-                        "$multiply": [monthly_deposit, total_term_months]
-                    },
-                    "interest": {
-                        "$multiply": [
-                            {
-                                "$divide": [
-                                    {
-                                        "$multiply": [
-                                            monthly_deposit,
-                                            {
-                                                "$add": [total_term_months, 1]
-                                            },
-                                            total_term_months,
-                                        ]
-                                    },
-                                    24,
-                                ]
-                            },
-                            {
-                                "$divide": ["$maxPreferentialRate", 100]
-                            },
-                        ]
-                    },
-                }
-            },
-            {
-                "$addFields": {
-                    "maturityAmount": {
-                        "$add": ["$principal", "$interest"]
-                    }
-                }
-            },
-        ]
-
-    extra += [
-        {
-            "$setWindowFields": {                # 기본금리 랭킹
-                "sortBy": {"baseInterestRate": -1},
-                "output": {"base_rate_rank": {"$rank": {}}},
+    score = {
+        "$addFields": {
+            "score": {
+                "$add": [{
+                    "$multiply": ["$normBase", w_base]
+                }, {
+                    "$multiply": ["$normMax", w_max]
+                }]
             }
-        },
-        {
-            "$setWindowFields": {                # 중간금리 랭킹
-                "sortBy": {"midPreferentialRate": -1},
-                "output": {"mid_rate_rank": {"$rank": {}}},
+        }
+    }
+
+    # --- 5) 금리 순위(base_rate_rank, max_rate_rank) -----------------------
+    rank_base = {
+        "$setWindowFields": {
+            "sortBy": {
+                "baseRate": -1
+            },
+            "output": {
+                "base_rate_rank": {
+                    "$rank": {}
+                }
             }
-        },
+        }
+    }
+
+    rank_max = {
+        "$setWindowFields": {
+            "sortBy": {
+                "max_interest_rate": -1
+            },
+            "output": {
+                "max_rate_rank": {
+                    "$rank": {}
+                }
+            }
+        }
+    }
+
+    # 완성된 파이프라인
+    full_stages = [
+        fill_stage,
+        filter_stage,
+        base_rate_stage,
+        calc_fin_stage,
+        calc_interest_stage,
+        stats_facet,
+        *unwind_stats,
+        norm,
+        score,
+        rank_base,
+        rank_max,
         {
-            "$setWindowFields": {                # 최대금리 랭킹
-                "sortBy": {"maxPreferentialRate": -1},
-                "output": {"max_rate_rank": {"$rank": {}}},
+            "$sort": {
+                "score": -1
             }
         },
     ]
 
-    if offset > 0:
-        extra.append({"$skip": offset})
+    full_stages += [{"$skip": offset}, {"$limit": top_k}]
 
-    extra.append({"$limit": top_k})
-
-    return base_pipeline + extra
-
-
-from pprint import pprint
+    return full_stages
 
 
 async def find_savings(
@@ -447,12 +361,13 @@ async def find_savings(
     offset: int = 0,
 ) -> List[SavingSearchResult]:
 
-    pipeline = build_pipeline(weights=weights,
-                              target_amount=target_amount,
-                              monthly_deposit=monthly_deposit,
-                              total_term_months=total_term_months,
-                              top_k=top_k,
-                              offset=offset)
+    pipeline = build_search_pipeline(target_amount=target_amount,
+                                     monthly_deposit=monthly_deposit,
+                                     total_term_months=total_term_months,
+                                     top_k=top_k,
+                                     w_base=weights.base,
+                                     w_max=weights.max,
+                                     offset=offset)
 
     try:
         cursor = collection.aggregate(pipeline)
@@ -462,7 +377,7 @@ async def find_savings(
         return savings
 
     except Exception as e:
-        raise RuntimeError("적금 검색에 실패했습니다.") from e
+        raise RuntimeError(f"적금 검색에 실패했습니다: {e}") from e
 
 
 async def _test():
@@ -470,24 +385,26 @@ async def _test():
     _, db = init_mongodb_client()
     collection = db.get_collection("savings")
 
-    weights = SavingRateWeights(base=0.3, max=0.2, intermediate=0.5)
-    target_amount = 30_000_000
-    monthly_deposit = 500_000
-    #total_term_months = 12
-    top_k = 5
+    weights = SavingRateWeights(base=0.3, max=0.3)
+    #target_amount = 3_000_000
+    monthly_deposit = 100_000
+    total_term_months = 12
+    top_k = 10
 
     try:
         results = await find_savings(
             collection=collection,
             weights=weights,
-            target_amount=target_amount,
             monthly_deposit=monthly_deposit,
+            total_term_months=total_term_months,
             top_k=top_k,
         )
 
         print("적금 검색 결과:")
         for idx, result in enumerate(results, 1):
-            pprint(f"{idx}. {result}\n\n")
+            print(
+                f"{idx}. {result.product.name} ({result.product.institution}) 최대 금리 {result.product.max_interest_rate}% , 기본 금리 {result.product.base_interest_rate}%, 원금 {result.principal}, 이자 {result.interest}"
+            )
 
     except Exception as e:
         print("테스트 실패:", e)
