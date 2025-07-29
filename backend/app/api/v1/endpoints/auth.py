@@ -1,103 +1,99 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from urllib.parse import urlencode, urlparse, urlunparse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel
 
-from app.dependencies import get_database
-from app.kakao import KakaoAuth
+from app.core.deps import inject
 
 from dotenv import load_dotenv
 
-from domains.user.auth import InvalidTokenError, TokenService
-from domains.user.models import SocialAccount, User
-from domains.user.user_repo import SocialRepository, UserRepository
+from domains.auth.services import InvalidTokenError, TicketService, TokenService, KakaoOAuthService
+
+from domains.auth.usecases import KakaoAuthUseCase
+from domains.user.models import User
+from domains.user.services import UserService
 
 load_dotenv()
 
 router = APIRouter(prefix="")
 
-kakao_api = KakaoAuth()
-
 
 @router.get("/kakao/login")
-def get_kakao_code():
+def get_kakao_code(kakao_api: KakaoOAuthService = Depends(inject(KakaoOAuthService))):
     return RedirectResponse(kakao_api.auth_url)
 
 
 @router.get("/kakao/callback")
-async def kakao_redirection(req: Request,
-                            code: str,
-                            db: AsyncIOMotorDatabase = Depends(get_database)):
+async def kakao_redirection(code: str,
+                            kakao_usecase: KakaoAuthUseCase = Depends(
+                                inject(KakaoAuthUseCase))):
 
-    user_repo = UserRepository(db)
-    token_service = TokenService(db)
-    social_repo = SocialRepository(db)
+    kakao_result = await kakao_usecase.callback(code)
 
-    token_info = await kakao_api.get_kakao_token(code)
-    kakao_user_info = await kakao_api.get_user_info(token_info.access_token)
+    query_string = urlencode({"ticket": kakao_result.raw_ticket})
+    parsed_url = urlparse(kakao_result.redirect_url)
+    redirect_url = urlunparse(parsed_url._replace(query=query_string))
 
-    if not kakao_user_info:
-        return RedirectResponse(url="/error", status_code=302)
+    return RedirectResponse(url=redirect_url, status_code=302)
 
-    kakao_user_id: str = kakao_user_info["kakao_user_id"]
-    social_account = await social_repo.get_by_provider_id("kakao", kakao_user_id)
 
-    redirect_url = "/"
+class ExchangeIn(BaseModel):
+    ticket: str
 
-    if not social_account:
-        # 소셜 계정이 존재하지 않는 경우
-        new_user = await user_repo.create_user(
-            User(
-                email=kakao_user_info["email"],
-                nickname=kakao_user_info["nickname"],
-                profile_image_url=kakao_user_info["nickname"],
-            ))
 
-        user_id = new_user.id
+class ExchangeOut(BaseModel):
 
-        await social_repo.create(
-            SocialAccount(user_id=user_id,
-                          provider="kakao",
-                          provider_user_id=kakao_user_id))
+    is_temporary: bool
+    profile: User
 
-        redirect_url = "/signup/details"
 
-    else:
-        if social_account.temp:
-            # 소셜 계정이 존재하지만 임시 계정인 경우
-            user_id = social_account.user_id
-            redirect_url = "/signup/details"
+@router.post("/exchange", response_model=ExchangeOut, status_code=200)
+async def exchange_ticket(req: ExchangeIn,
+                          res: Response,
+                          token_service: TokenService = Depends(inject(TokenService)),
+                          user_service: UserService = Depends(inject(UserService)),
+                          ticket_service: TicketService = Depends(
+                              inject(TicketService))):
 
-        else:
-            # 가입된 소셜 계정이 존재하는 경우
-            user_id = social_account.user_id
+    ticket = req.ticket
+    if not ticket:
+        raise HTTPException(400, "ticket required")
 
+    user_id = await ticket_service.consume_ticket(ticket)
+    _user = await user_service.get_user_by_id(user_id) if user_id else None
+
+    if not user_id or not _user:
+        return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,
+                            content={"detail": "User not exists."})
+
+    user, user_social = _user
     tokens = await token_service.issue_new_token_pair(user_id)
-    res = RedirectResponse(url=redirect_url, status_code=302)
 
-    res.set_cookie(key="access_token",
-                   value=tokens["access_token"],
-                   httponly=True,
-                   secure=True,
-                   samesite="strict",
-                   max_age=1800,
-                   path="/")
+    res.set_cookie(
+        key="access_token",
+        value=tokens["access_token"],
+        #httponly=True,
+        secure=False,
+        #samesite="strict",
+        samesite="lax",
+        max_age=1800,
+        path="/")
 
-    res.set_cookie(key="refresh_token",
-                   value=tokens["refresh_token"],
-                   httponly=True,
-                   secure=True,
-                   samesite="strict",
-                   max_age=1209600,
-                   path="/")
+    res.set_cookie(
+        key="refresh_token",
+        value=tokens["refresh_token"],
+        #httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=1209600,
+        path="/")
 
-    return res
+    return ExchangeOut(is_temporary=user_social.temp, profile=user)
 
 
 @router.post("/token/refresh")
 async def refresh_token(request: Request,
-                        db: AsyncIOMotorDatabase = Depends(get_database)):
-
-    token_service = TokenService(db)
+                        token_service: TokenService = Depends(inject(TokenService))):
 
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
@@ -122,3 +118,32 @@ async def refresh_token(request: Request,
                         max_age=1800)
 
     return response
+
+
+@router.post("/logout")
+async def logout(request: Request,
+                 response: Response,
+                 token_service: TokenService = Depends(inject(TokenService))):
+
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+
+    if not access_token or not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    payload = token_service.verify_and_decode_token(access_token)
+    user_id = payload.get("sub")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    await token_service.logout(user_id=user_id, refresh_token=refresh_token)
+
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")

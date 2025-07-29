@@ -1,20 +1,19 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from app.dependencies import get_database
+from app.core.deps import inject
 from app.schemas.user import UserIn
-from domains.user.auth import InvalidTokenError, TokenService
+from domains.auth.services import InvalidTokenError, TokenService
 from domains.user.models import User
-from domains.user.user_repo import SocialRepository, UserRepository
+from domains.user.repositories import UserRepository
+from domains.user.services import AlreadyRegistered, SocialAccountNotFound, UserService
 
 router = APIRouter(prefix="")
 
 
 async def get_current_user(req: Request,
-                           db: AsyncIOMotorDatabase = Depends(get_database)):
-    token_service = TokenService(db)
-    user_crud = UserRepository(db)
+                           token_service: TokenService = Depends(inject(TokenService)),
+                           user_repo: UserRepository = Depends(inject(UserRepository))):
 
     access_token = req.cookies.get("access_token")
     if not access_token:
@@ -32,7 +31,7 @@ async def get_current_user(req: Request,
                 detail="Invalid token payload",
             )
 
-        user = await user_crud.get_user_by_id(user_id)
+        user = await user_repo.get_user_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -52,15 +51,15 @@ async def get_current_user(req: Request,
         )
 
 
-@router.get("/me/temporary")
-async def get_temporary_user_info(user: Optional[User] = Depends(get_current_user)):
+@router.get("/me", status_code=200)
+async def get_user_info(user: Optional[User] = Depends(get_current_user)):
     return user
 
 
-@router.post("/me/temporary")
+@router.post("/signup")
 async def user_signup(user_in: UserIn,
                       user: Optional[User] = Depends(get_current_user),
-                      db: AsyncIOMotorDatabase = Depends(get_database)):
+                      user_service: UserService = Depends(inject(UserService))):
 
     if not user:
         raise HTTPException(
@@ -68,5 +67,17 @@ async def user_signup(user_in: UserIn,
             detail="사용자 정보가 없습니다.",
         )
 
-    social_repo = SocialRepository(db)
-    social_account = await social_repo.get_by_user_id(user.id)
+    try:
+        await user_service.signup(user.id, user_in)
+    except SocialAccountNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="사용자 정보가 없습니다.",
+        )
+    except AlreadyRegistered:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 가입된 사용자입니다.",
+        )
+
+    return Response(status_code=status.HTTP_201_CREATED)
