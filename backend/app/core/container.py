@@ -1,6 +1,16 @@
 from typing import Any, Callable, Dict, Type, TypeVar, cast
+
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+
 from app.core.config import AppConfig
+from domains.auth.repositories import TokenRepository, TicketRepository
+from domains.auth.services import KakaoOAuthService, TicketService, TokenService
+
+from domains.auth.usecases import KakaoAuthUseCase
+from domains.user.repositories import SocialRepository, UserRepository
+from domains.user.services import UserService
+
+from functools import lru_cache
 
 T = TypeVar("T")
 
@@ -56,3 +66,68 @@ class AppContainer:
                 return cast(T, instance)
 
         raise ValueError(f"{key.__name__}가 컨테이너에 등록되어 있지 않습니다.")
+
+
+@lru_cache
+async def init_container() -> AppContainer:
+    c = AppContainer()
+
+    c.register(AppConfig, lambda _: AppConfig.from_env())
+
+    def _db_factory(_c: AppContainer) -> AsyncIOMotorDatabase:
+        cfg = _c.resolve(AppConfig)
+        return cfg.mongo.connect()
+
+    c.register(AsyncIOMotorDatabase, _db_factory)
+
+    c.register(
+        UserRepository, lambda _c: UserRepository(
+            cfg=_c.resolve(AppConfig),
+            db=_c.resolve(AsyncIOMotorDatabase),
+        ))
+    c.register(
+        SocialRepository, lambda _c: SocialRepository(
+            cfg=_c.resolve(AppConfig),
+            db=_c.resolve(AsyncIOMotorDatabase),
+        ))
+    c.register(
+        TokenRepository, lambda _c: TokenRepository(
+            cfg=_c.resolve(AppConfig),
+            db=_c.resolve(AsyncIOMotorDatabase),
+        ))
+    c.register(
+        TicketRepository, lambda _c: TicketRepository(
+            cfg=_c.resolve(AppConfig),
+            db=_c.resolve(AsyncIOMotorDatabase),
+        ))
+
+    c.register(
+        TicketService, lambda _c: TicketService(
+            cfg=_c.resolve(AppConfig),
+            ticket_repo=_c.resolve(TicketRepository),
+        ))
+    c.register(
+        TokenService, lambda _c: TokenService(
+            cfg=_c.resolve(AppConfig),
+            token_repo=_c.resolve(TokenRepository),
+        ))
+    c.register(
+        UserService, lambda _c: UserService(
+            cfg=_c.resolve(AppConfig),
+            user_repo=_c.resolve(UserRepository),
+            social_repo=_c.resolve(SocialRepository),
+        ))
+    c.register(KakaoOAuthService,
+               lambda _c: KakaoOAuthService(cfg=_c.resolve(AppConfig),))
+
+    c.register(
+        KakaoAuthUseCase, lambda _c: KakaoAuthUseCase(
+            kakao_service=_c.resolve(KakaoOAuthService),
+            user_service=_c.resolve(UserService),
+            token_service=_c.resolve(TokenService),
+            ticket_service=_c.resolve(TicketService),
+        ))
+
+    #await c.resolve(TicketRepository).ensure_indexes()
+
+    return c
