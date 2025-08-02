@@ -21,6 +21,8 @@ class MongoCollections:
     tickets: str = field(
         default_factory=lambda: os.getenv("COL_LOGIN_TICKETS", "login_tickets"))
 
+    chats: str = field(default_factory=lambda: os.getenv("COL_CHATS", "chats"))
+
 
 @dataclass(frozen=True)
 class MongoConfig:
