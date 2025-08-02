@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import hashlib
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional, TypedDict
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 import uuid
@@ -34,6 +34,7 @@ class TokenService:
 
     async def issue_new_token_pair(self, user_id: str) -> TokenPair:
         """액세스 토큰과 리프레시 토큰 쌍 발급 및 DB 저장"""
+
         access_token_expires = timedelta(minutes=self.auth.access_token_expire_minutes)
         refresh_token_expires = timedelta(days=self.auth.refresh_token_expire_days)
 
@@ -47,7 +48,8 @@ class TokenService:
             access_token_expires_at=datetime.now(timezone.utc) + access_token_expires,
             refresh_token_expires_at=datetime.now(timezone.utc) + refresh_token_expires)
 
-        await self.token_repo.upsert_tokens(token_model.model_dump())
+        #await self.token_repo.upsert_tokens(token_model.model_dump())
+        await self.token_repo.insert_token(token_model)
 
         return {"access_token": at, "refresh_token": rt}
 
@@ -90,7 +92,9 @@ class TokenService:
                 datetime.now(timezone.utc) + access_token_expires,
         }
 
-        await self.token_repo.upsert_tokens({"user_id": user_id, **update_data})
+        await self.token_repo.upsert_tokens(user_id=user_id,
+                                            refresh_token=refresh_token,
+                                            new_data=update_data)
 
         return new_at
 
