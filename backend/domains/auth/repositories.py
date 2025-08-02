@@ -1,8 +1,9 @@
 from typing import Dict, Optional, Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pymongo.results import DeleteResult
+from pymongo.results import DeleteResult, UpdateResult
 
 from app.core.config import AppConfig
+from domains.user.models import Token
 
 
 class TicketRepository:
@@ -32,14 +33,30 @@ class TokenRepository:
     def __init__(self, *, cfg: AppConfig, db: AsyncIOMotorDatabase):
         self.col = db.get_collection(cfg.mongo.collections.tokens)
 
-    async def upsert_tokens(self, token_data: Dict[str, Any]) -> Dict[str, Any]:
-        return await self.col.find_one_and_update({"user_id": token_data["user_id"]},
-                                                  {"$set": token_data},
-                                                  upsert=True)
+    async def upsert_tokens(self, user_id: str, refresh_token: str,
+                            new_data: Dict[str, Any]) -> UpdateResult:
+        return await self.col.update_one(
+            {
+                "user_id": user_id,
+                "refresh_token": refresh_token
+            }, {"$set": new_data},
+            upsert=True)
 
-    async def get_tokens_by_refresh_token(
-            self, refresh_token: str) -> Optional[Dict[str, Any]]:
-        return await self.col.find_one({"refresh_token": refresh_token})
+    async def insert_token(self, token: Token) -> Token:
+        await self.col.insert_one(token.model_dump(by_alias=True))
+        return token
+
+    async def get_tokens_by_refresh_token(self, refresh_token: str) -> Optional[Token]:
+        raw = await self.col.find_one({"refresh_token": refresh_token})
+        return Token.model_validate(raw) if raw else None
+
+    async def get_tokens_by_user_and_refresh_token(
+            self, user_id: str, refresh_token: str) -> Optional[Token]:
+        raw = await self.col.find_one({
+            "refresh_token": refresh_token,
+            "user_id": user_id
+        })
+        return Token.model_validate(raw) if raw else None
 
     async def delete_tokens(self,
                             *,
