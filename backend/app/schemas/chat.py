@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from pytz import timezone
 
 from app.schemas.product import PartialProductInfoDTO, ProductInfoDTO
+from domains.chat.models import ChatMessage, ChatProductInfo, ChatProductPartialInfo
+from domains.chat.repositories import ChatPreviewDTO
 
 
 class ChatRequest(BaseModel):
@@ -14,7 +16,9 @@ class ChatRequest(BaseModel):
 
 class ChatContentDTO(BaseModel):
     message: Optional[str] = None
-    products: Optional[Union[List[ProductInfoDTO], List[PartialProductInfoDTO]]] = None
+    #products: Optional[Union[List[ProductInfoDTO], List[PartialProductInfoDTO]]] = None
+    products: Optional[Union[List[ChatProductInfo],
+                             List[ChatProductPartialInfo]]] = None
 
 
 ChatResponseStatus = Literal["pending", "title", "response", "failed", "stop"]
@@ -42,9 +46,10 @@ class ChatDetailResponse(BaseModel):
 
     size: int
     offset: int
-    items: List[ChatHistoryDTO]
+    items: List[ChatMessage]
 
 
+"""
 class ChatPreviewDTO(BaseModel):
 
     chat_id: str
@@ -58,6 +63,7 @@ class ChatPreviewDTO(BaseModel):
                 lambda v: v.astimezone(timezone('Asia/Seoul')).isoformat(
                     timespec='milliseconds').replace('+00:00', 'Z')
         }
+"""
 
 
 class ChatListResponse(BaseModel):
