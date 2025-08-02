@@ -60,6 +60,7 @@ class SavingSearchResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True, strict=False)
 
     def __init__(self, **data):
+        data["interest"] = int(data["interest"])
         super().__init__(product=Saving(**data), **data)
 
     def __str__(self) -> str:
