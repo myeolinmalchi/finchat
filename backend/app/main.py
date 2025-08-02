@@ -75,16 +75,22 @@ async def verify_token_middleware(req: Request, call_next):
 
     access_token = req.cookies.get("access_token")
     if not access_token:
-        return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,
-                            content={"detail": "Not authenticated"})
+        res = JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,
+                           content={"detail": "Not authenticated"})
+        res.delete_cookie("access_token")
+        res.delete_cookie("refresh_token")
+        return res
 
     try:
         payload = token_service.verify_and_decode_token(access_token)
         req.state.user_id = payload.get("sub")
 
     except Exception:
-        return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,
-                            content={"detail": "Token has expired or is invalid"})
+        res = JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,
+                           content={"detail": "Token has expired or is invalid"})
+        res.delete_cookie("access_token")
+        res.delete_cookie("refresh_token")
+        return res
 
     response = await call_next(req)
     return response
