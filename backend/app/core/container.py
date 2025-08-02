@@ -7,6 +7,8 @@ from domains.auth.repositories import TokenRepository, TicketRepository
 from domains.auth.services import KakaoOAuthService, TicketService, TokenService
 
 from domains.auth.usecases import KakaoAuthUseCase
+from domains.chat.repositories import ChatRepository
+from domains.chat.services import ChatService
 from domains.user.repositories import SocialRepository, UserRepository
 from domains.user.services import UserService
 
@@ -127,6 +129,16 @@ async def init_container() -> AppContainer:
             token_service=_c.resolve(TokenService),
             ticket_service=_c.resolve(TicketService),
         ))
+
+    c.register(
+        ChatRepository, lambda _c: ChatRepository(
+            cfg=_c.resolve(AppConfig),
+            db=_c.resolve(AsyncIOMotorDatabase),
+        ))
+    c.register(
+        ChatService, lambda _c: ChatService(cfg=_c.resolve(AppConfig),
+                                            user_repo=_c.resolve(UserRepository),
+                                            chat_repo=_c.resolve(ChatRepository)))
 
     #await c.resolve(TicketRepository).ensure_indexes()
 
