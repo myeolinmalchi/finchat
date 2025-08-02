@@ -1,116 +1,18 @@
-import asyncio
-from typing import AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, Header
-from langchain_upstage import ChatUpstage
-from openai import AsyncOpenAI
+from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi.responses import JSONResponse
 from starlette.responses import StreamingResponse
 
-from app.crud import get_history, list_chats, save_msg, update_chat_title, upsert_chat
+from app.core.deps import inject
 from app.dependencies import get_workflow_stream
-from app.schemas.chat import (ChatContentDTO, ChatDetailResponse, ChatHistoryDTO,
-                              ChatListResponse, ChatPreviewDTO, ChatRequest,
-                              ChatResponseDTO)
-
-from fastapi.encoders import jsonable_encoder
+from app.schemas.chat import (ChatDetailResponse, ChatListResponse, ChatRequest)
 
 from dotenv import load_dotenv
 
-import os
-import json
+from domains.chat.services import ChatService
 
 load_dotenv()
 
 router = APIRouter(prefix="")
-
-UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
-
-openai_client = AsyncOpenAI(
-    api_key=UPSTAGE_API_KEY,
-    base_url="https://api.upstage.ai/v1",
-)
-
-
-async def generate_chat_title(chat_id: str, question: str) -> str:
-    system_prompt = ("다음 사용자 질문에서 짧고 요약된 대화 제목을 한 문장으로 만들어주세요. "
-                     "20자 이내로 간결하게 작성해주세요.")
-
-    response = await openai_client.chat.completions.create(
-        model="solar-pro",
-        messages=[{
-            "role": "system",
-            "content": system_prompt
-        }, {
-            "role": "user",
-            "content": question
-        }],
-        temperature=0.3,
-        max_tokens=30,
-    )
-
-    title = response.choices[0].message.content or "새로운 대화"
-    update_chat_title(chat_id, title)
-
-    print("- 질문: ", question, ", 제목: ", title)
-
-    return title
-
-
-async def chat_events(req: ChatRequest, run_stream) -> AsyncGenerator[str, None]:
-
-    chat_id = upsert_chat(req.chat_id, "새로운 대화")
-
-    title_task = None
-    if not req.chat_id:
-        title_task = asyncio.create_task(generate_chat_title(chat_id, req.message))
-
-    user_content = ChatContentDTO(message=req.message)
-    save_msg(chat_id, "user", jsonable_encoder(user_content))
-
-    products = []
-    reply_chunks = []
-
-    initial_response = ChatResponseDTO(chat_id=chat_id,
-                                       status="pending",
-                                       content=ChatContentDTO(message="질문을 이해하고 있습니다."))
-
-    data_json = json.dumps(jsonable_encoder(initial_response), ensure_ascii=False)
-    yield f"data: {data_json}\n\n"
-
-    title_yielded = False
-
-    async for _, chunk in run_stream(req.message, chat_id):
-        payload = ChatResponseDTO(**chunk)
-        data_json = json.dumps(jsonable_encoder(payload), ensure_ascii=False)
-
-        yield f"data: {data_json}\n\n"
-
-        match payload:
-            case ChatResponseDTO(status="response",
-                                 content=ChatContentDTO(products=None,
-                                                        message=reply_chunk)):
-                reply_chunks.append(reply_chunk)
-
-            case ChatResponseDTO(status="response",
-                                 content=ChatContentDTO(products=_products)):
-                products = _products
-
-        if not title_yielded and title_task and title_task.done():
-            try:
-                title = title_task.result()
-            except Exception:
-                title = "새로운 대화"
-
-            _send_title = ChatResponseDTO(chat_id=chat_id,
-                                          status="title",
-                                          content=ChatContentDTO(message=title))
-            yield f"data: {json.dumps(jsonable_encoder(_send_title), ensure_ascii=False)}\n\n"
-
-            title_yielded = True
-
-    assistant_content = ChatContentDTO(message="".join(reply_chunks), products=products)
-    save_msg(chat_id, "assistant", jsonable_encoder(assistant_content))
-
-    yield "data: [DONE]\n\n"
 
 
 @router.post("", response_class=StreamingResponse)
