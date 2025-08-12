@@ -38,7 +38,7 @@ SUPERVISOR_SYSTEM_PROMPT = """\
 def init_supervisor_node(llm: BaseChatModel):
 
     class SupervisorResponse(TypedDict):
-        plan: List[Members]
+        plans: List[PlanWithGoals]
         next: Members
 
     async def supervisor_node(state: GraphState):
@@ -47,8 +47,8 @@ def init_supervisor_node(llm: BaseChatModel):
         writer = get_stream_writer()
 
         # 1) 이미 계획이 있으면 다음 단계만 실행
-        if "plan" in state and state["current_step"] < len(state["plan"]):
-            next_ = state["plan"][state["current_step"]]
+        if "plans" in state and state["current_step"] < len(state["plans"]):
+            next_ = state["plans"][state["current_step"]]
             return {"next": next_, "current_step": state["current_step"] + 1}
 
         writer({
@@ -71,10 +71,9 @@ def init_supervisor_node(llm: BaseChatModel):
             SupervisorResponse, await
             llm.with_structured_output(SupervisorResponse).ainvoke(messages))
 
-        print(f"plan: {result['plan']}")
-        print(f"next: {result['next']}")
+        print(result["plans"])
 
-        return {"next": result["next"], "plan": result["plan"], "current_step": 1}
+        return {"next": result["plans"][0], "plans": result["plans"], "current_step": 1}
 
     return supervisor_node
 

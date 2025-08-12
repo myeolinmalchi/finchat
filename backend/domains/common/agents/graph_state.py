@@ -13,6 +13,11 @@ ProductSearchResults = Union[List[SavingSearchResult]] | None
 ProductSearchResult = Union[SavingSearchResult]
 
 
+class PlanWithGoals(TypedDict):
+    member: Members
+    goal: str
+
+
 class GraphState(TypedDict):
 
     messages: Annotated[list[BaseMessage], add_messages]
@@ -27,7 +32,7 @@ class GraphState(TypedDict):
     offset: int
     target_count: int  # 목표 상품 개수
 
-    plan: List[Members]  # 예정된 하위 노드 실행 순서
+    plans: List[PlanWithGoals]  # 예정된 하위 노드 실행 순서
     current_step: int  # 진행 중인 단계 인덱스
 
-    next: Optional[str]
+    next: Optional[PlanWithGoals]
