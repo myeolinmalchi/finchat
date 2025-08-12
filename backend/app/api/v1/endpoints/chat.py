@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import JSONResponse
+from langchain_openai.chat_models.base import ChatOpenAI
 from starlette.responses import StreamingResponse
 
 from app.core.deps import inject
@@ -9,10 +10,14 @@ from app.schemas.chat import (ChatDetailResponse, ChatListResponse, ChatRequest)
 from dotenv import load_dotenv
 
 from domains.chat.services import ChatService
+from domains.user.agents.memory_extraction_chain import build_memory_extraction_chain
+from domains.user.services import UserMemoryService
 
 load_dotenv()
 
 router = APIRouter(prefix="")
+
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
 
 
 @router.post("", response_class=StreamingResponse)
@@ -21,15 +26,20 @@ async def stream_chat(req: Request,
                       last_event_id: str | None = Header(None,
                                                          convert_underscores=False),
                       run_stream=Depends(get_workflow_stream),
+                      memory_service: UserMemoryService = Depends(
+                          inject(UserMemoryService)),
                       chat_service: ChatService = Depends(inject(ChatService))):
 
     headers = {"Cache-Control": "no-cache"}
+
+    chain = build_memory_extraction_chain(llm=llm, memory_service=memory_service)
 
     return StreamingResponse(
         chat_service.chat_events(chat_id=body.chat_id,
                                  user_id=req.state.user_id,
                                  message=body.message,
-                                 run_stream=run_stream),
+                                 run_stream=run_stream,
+                                 memory_chain=chain),
         media_type="text/event-stream",
         headers=headers,
     )
