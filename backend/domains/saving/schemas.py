@@ -49,7 +49,7 @@ class SavingSearchResult(BaseModel):
     """메타데이터를 포함하는 적금 상품 검색 결과"""
 
     product: Saving
-    score: float
+    score: float = 0
 
     interest: Optional[int] = None  # 총 이자
     principal: Optional[int] = None  # 원금
@@ -60,7 +60,13 @@ class SavingSearchResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True, strict=False)
 
     def __init__(self, **data):
-        data["interest"] = int(data["interest"])
+        if "product" in data:
+            super().__init__(product=data["product"])
+            return
+
+        if "interest" in data:
+            data["interest"] = int(data["interest"])
+
         super().__init__(product=Saving(**data), **data)
 
     def __str__(self) -> str:
@@ -76,8 +82,6 @@ class SavingSearchResult(BaseModel):
                   f"{str(self.product)}\n\n"
                   "### 이율 정보\n"
                   f"{info}")
-
-        print(result)
 
         return result
 
