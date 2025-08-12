@@ -166,7 +166,9 @@ def init_graph(
     )
     """
 
-    saving_tools = init_saving_retrieval_tools(db.get_collection("savings"))
+    saving_col = db.get_collection("savings")
+
+    saving_tools = init_saving_retrieval_tools(saving_col)
     sg.add_node("saving_node", init_saving_subgraph(llm, saving_tools))
 
     _retrieval_subgraph = init_retrieval_subgraph()
@@ -189,30 +191,47 @@ def init_graph(
 
     graph = sg.compile()
 
-    async def stream_graph(user_msg: str, chat_id: str) -> AsyncIterator[dict]:
+    async def stream_graph(
+            user_msg: str,
+            curr_chat: Chat,
+            config: Optional[RunnableConfig] = None) -> AsyncIterator[dict]:
+
+        products: List[ChatProductInfo] = []
+        prev_messages: List[BaseMessage] = []
+
+        if curr_chat.messages:
+            # 마지막 추천 상품을 전역 시스템 프롬프트에 추가
+            products = list(
+                filter(lambda msg: msg.role == "assistant",
+                       curr_chat.messages))[-1].content.products or []
+
+            # 이전 대화 내역 convert (products 제외)
+            prev_messages = list(
+                map(
+                    lambda msg: HumanMessage(content=msg.content.message or "")
+                    if msg.role == "assistant" else AIMessage(
+                        content=msg.content.message or ""), curr_chat.messages))
+
+        saving_ids = [p.product_id for p in products if p.product_id]
+        savings = await get_saving_by_ids(saving_col, saving_ids)
+
         init_state: GraphState = {
-            "chat_id": chat_id,
-            "messages": [HumanMessage(content=user_msg)],
+            "chat_id": curr_chat.id,
+            "messages": [*prev_messages, HumanMessage(content=user_msg)],
             "documents": [],
             "candidates": [],
-            "selected": [],
+            "selected": savings,
             "offset": 0,
-            "target_count": target_count,
+            "target_count": target_count + len(savings),
             "next": None,
-            "plan": [],
+            "plans": [],
             "current_step": 0,
-            "user_info": {
-                "나이": "27세",
-                "직업": "대학생",
-                "월 소득": "50만원",
-                "투자 성향": "안정적인 투자 선호",
-                "결혼 여부": "미혼, 자녀없음"
-            }
+            "user_info": None,
         }
         async for chunk in graph.astream(init_state,
                                          stream_mode="custom",
                                          subgraphs=True,
-                                         config={"recursion_limit": 100}):
+                                         config=config):
             yield chunk
 
     return stream_graph
