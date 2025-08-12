@@ -15,6 +15,8 @@ load_dotenv()
 class MongoCollections:
 
     users: str = field(default_factory=lambda: os.getenv("COL_USERS", "users"))
+    user_memories: str = field(
+        default_factory=lambda: os.getenv("COL_USER_MEMORIES", "user_memories"))
     tokens: str = field(default_factory=lambda: os.getenv("COL_TOKENS", "tokens"))
     social_accounts: str = field(
         default_factory=lambda: os.getenv("COL_SOCIAL_ACCOUNTS", "social_accounts"))
