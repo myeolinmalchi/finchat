@@ -4,8 +4,9 @@ import {
   createBrowserRouter,
 } from 'react-router-dom';
 
-import Layout from '@/layouts';
+import { AppLayout } from '@/layouts/AppLayout';
 
+import { FeedPage } from '@/pages/Feed';
 import { HomePage } from '@/pages/Home';
 import { LoginPage } from '@/pages/Login';
 import { SignupPage } from '@/pages/Signup';
@@ -14,7 +15,8 @@ import { RouterPath } from './path';
 
 const router = createBrowserRouter([
   {
-    element: <Layout />,
+    path: RouterPath.ROOT,
+    element: <AppLayout />,
     children: [
       {
         path: RouterPath.HOME,
@@ -29,14 +31,14 @@ const router = createBrowserRouter([
         element: <LoginPage />,
       },
       {
-        path: RouterPath.SIGNUP,
-        element: <SignupPage />,
-      },
-      {
-        path: RouterPath.NOT_FOUND,
-        element: <Navigate to={RouterPath.HOME} />,
+        path: RouterPath.FEED,
+        element: <FeedPage />,
       },
     ],
+  },
+  {
+    path: RouterPath.NOT_FOUND,
+    element: <Navigate to={RouterPath.HOME} />,
   },
 ]);
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useParams } from 'react-router-dom';
 
@@ -46,9 +46,6 @@ export const HomePage = () => {
     }
   }, [chatId, setMessages]);
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,15 +55,9 @@ export const HomePage = () => {
   }, [messages]);
 
   return (
-    <>
-      <Sidebar isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
-
+    <div className="relative flex h-screen overflow-hidden bg-white">
       <div
-        className={`[&::-webkit-scrollbar-thumb]:[bg-none] box-border flex h-[calc(100vh-40px)] flex-1 flex-col items-center overflow-y-auto transition-all duration-300 [&::-webkit-scrollbar-thumb]:[background-color:lightgray] [&::-webkit-scrollbar-thumb]:[border-radius:8px] [&::-webkit-scrollbar]:[width:8px] ${
-          messages.length === 0
-            ? 'justify-center'
-            : 'relative mb-[40px] pt-[100px]'
-        }`}
+        className={`[&::-webkit-scrollbar-thumb]:[bg-none] box-border flex h-[calc(100vh-40px)] flex-1 flex-col items-center overflow-y-auto transition-all duration-300 [&::-webkit-scrollbar-thumb]:[background-color:lightgray] [&::-webkit-scrollbar-thumb]:[border-radius:8px] [&::-webkit-scrollbar]:[width:8px] ${messages.length === 0 ? 'justify-center' : 'relative mb-[40px] pt-[100px]'}`}
       >
         {messages.length === 0 && (
           <div className="mb-[24px] text-center">
@@ -112,6 +103,6 @@ export const HomePage = () => {
         onSend={() => sendMessage(input, chatId)}
         onCancel={cancelStreamingResponse}
       />
-    </>
+    </div>
   );
 };

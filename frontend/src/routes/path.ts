@@ -4,5 +4,6 @@ export const RouterPath = {
   LOGIN: '/login',
   SIGNUP: '/signup',
   CHAT_DETAIL: '/chat/:chatId',
+  FEED: '/feed',
   NOT_FOUND: '*',
 };
