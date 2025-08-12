@@ -1,38 +1,96 @@
-import asyncio
-from typing import AsyncIterator, List, TypedDict, cast
+from typing import AsyncIterator, List, Optional, Protocol, TypedDict, cast
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai.chat_models.base import ChatOpenAI
 from langchain_upstage import ChatUpstage
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, StateGraph
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from common.database import init_mongodb_client
-from domains.common.agents.graph_state import GraphState
+from domains.chat.models import Chat, ChatProductInfo
+from domains.common.agents.graph_state import GraphState, PlanWithGoals
 from domains.common.agents.retrieval_subgraph.retrieval_node import init_retrieval_node, init_retrieval_subgraph
 from domains.common.agents.types import Members
 from domains.saving.agents.explain_node import init_explain_node
 from domains.saving.agents.saving_subgraph import init_saving_subgraph
 from domains.saving.agents.tool_factory import init_saving_retrieval_tools
+from domains.saving.repositories.retrieval import get_saving_by_ids
 
 SUPERVISOR_SYSTEM_PROMPT = """\
 <Role>
-당신은 Supervisor Node로서 ‘적금 추천’ 전체 워크플로우를 계획하고 실행까지 조율한다.
+당신은 Supervisor Node로서 "적금 추천" 전체 워크플로우를 계획하고 실행까지 조율한다.
 </Role>
 
 <Goal>
-1. 사용자의 요구·제약·데이터 부족 여부를 분석해 하위 노드 실행 순서를 3단계 이내로 결정
-   • 외부 정보 필요 ➜ research_node 포함
-   • 내부 DB만으로 충분 ➜ saving_node→explain_node
+1. 사용자의 요구·제약·데이터 부족 여부를 분석해 하위 노드 실행 순서를 결정
+   - 상품 가격, 금리 추이 등의 외부 지식 정보가 필요한 경우 ->research_node 포함
+   - 상품 검색이 필요한 경우 -> saving_node -> explain_node
+   - 이전 대화 맥락만으로 충분한 경우 -> explain_node 단독 호출
+
 2. JSON 형태로 {"plan":[...], "next":"..."} 반환
 </Goal>
 
-<Output_Example>
+<Nodes>
+- research_node: 외부 정보 탐색을 위한 리서치 노드
+- saving_node: 적합한 적금 상품을 검색하기 위한 적금 노드
+- explain_node: 최종 응답을 생성하기 위한 설명 노드
+<Nodes>
+
+<Examples>
+### Example 1:
+질문:
+"6개월만 넣고, 중도해지해도 불이익 없는 적금 상품 있을까?"
+
 {
-  "plan": ["research_node", "saving_node", "explain_node"],
+  "plans": [
+    {
+      "member": "saving_node",
+      "goal": "사용자의 조건(6개월, 중도해지 시 불이익 없음)을 만족하는 적금 상품 검색"
+    },
+    {
+      "member": "explain_node",
+      "goal": "검색된 상품의 조건과 장단점을 사용자에게 설명"
+    }
+  ],
+  "next": "saving_node"
+}
+
+### Example 2:
+질문:
+"요즘 금리가 오르고 있다던데, 금리 높은 적금 상품 추천해줘"
+
+{
+  "plans": [
+    {
+      "member": "research_node",
+      "goal": "최근 기준 금리 및 시중 금리 동향 파악"
+    },
+    {
+      "member": "saving_node",
+      "goal": "금리 동향과 사용자 요구에 기반해 높은 금리의 적금 상품 검색"
+    },
+    {
+      "member": "explain_node",
+      "goal": "추천된 적금 상품의 금리 및 조건을 사용자에게 설명"
+    }
+  ],
   "next": "research_node"
 }
-</Output_Example>"""
+
+### Example 3:
+질문:
+"아까 추천해준 상품 다시 설명해줘"
+
+{
+  "plans": [
+    {
+      "member": "explain_node",
+      "goal": "이전에 추천한 적금 상품에 대해 다시 설명"
+    }
+  ],
+  "next": "explain_node"
+}
+</Examples>"""
 
 
 def init_supervisor_node(llm: BaseChatModel):
