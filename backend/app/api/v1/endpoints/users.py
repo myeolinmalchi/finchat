@@ -6,7 +6,7 @@ from app.schemas.user import UserIn
 from domains.auth.services import InvalidTokenError, TokenService
 from domains.user.models import User
 from domains.user.repositories import UserRepository
-from domains.user.services import AlreadyRegistered, SocialAccountNotFound, UserService
+from domains.user.services import AlreadyRegistered, SocialAccountNotFound, UserMemoryService, UserService
 
 router = APIRouter(prefix="")
 
@@ -54,6 +54,33 @@ async def get_current_user(req: Request,
 @router.get("/me", status_code=200)
 async def get_user_info(user: Optional[User] = Depends(get_current_user)):
     return user
+
+
+@router.get("/me/memories", status_code=200)
+async def get_memories(req: Request,
+                       memory_service: UserMemoryService = Depends(
+                           inject(UserMemoryService))):
+    memories = await memory_service.list_memories(user_id=req.state.user_id)
+    return {
+        "offset":
+            0,
+        "size":
+            len(memories),
+        "items": [{
+            "memory_id": m.id,
+            "content": m.content,
+            "created_at": m.created_at,
+            "updated_at": m.updated_at,
+        } for m in memories]
+    }
+
+
+@router.delete("/me/memories/{memory_id}")
+async def delete_memory(memory_id: str,
+                        memory_service: UserMemoryService = Depends(
+                            inject(UserMemoryService))):
+    print(memory_id)
+    await memory_service.remove_memory(memory_id=memory_id)
 
 
 @router.post("/signup")
