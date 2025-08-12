@@ -183,7 +183,7 @@ def init_graph(
     sg.add_edge("saving_node", "supervisor")
     sg.add_edge("explain_node", END)
 
-    sg.add_conditional_edges("supervisor", lambda s: s["next"])
+    sg.add_conditional_edges("supervisor", lambda s: s["next"]["member"])
 
     sg.set_entry_point("supervisor")
 
