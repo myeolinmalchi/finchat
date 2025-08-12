@@ -64,7 +64,7 @@ const Header = () => {
   const { userInfo, isPending } = useUserInfoStore();
   const { pathname } = useLocation();
 
-  const isHeaderVisible = pathname === '/' || pathname.startsWith('/chat/');
+  const isHeaderVisible = !pathname.startsWith('/login')
 
   if (!isHeaderVisible) {
     return <></>;
