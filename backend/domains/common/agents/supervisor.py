@@ -235,34 +235,3 @@ def init_graph(
             yield chunk
 
     return stream_graph
-
-
-import asyncio
-
-
-async def run(query: str):
-    """
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0.3,
-    )
-    """
-
-    llm = ChatUpstage(
-        model="solar-pro2",
-        temperature=0.3,
-        reasoning_effort="low",
-        max_tokens=16384,
-    )
-    _, db = init_mongodb_client()
-    run = init_graph(llm, db)
-
-    async for _, chunk in run(query, ""):
-        if chunk["status"] == "response":
-            print(chunk["content"]["message"], end="")
-        else:
-            print(chunk)
-
-
-if __name__ == "__main__":
-    asyncio.run(run("월 50씩 1년동안 모으려고 하는데 괜찮은 적금 추천좀 해주세요"))
