@@ -152,10 +152,10 @@ def init_graph(
 ) -> StreamGraphType:
     sg = StateGraph(GraphState)
 
-    llm_with_reasoning = ChatUpstage(
-        model="solar-pro2",
-        reasoning_effort="medium",
-        temperature=0.3,
+    llm_with_reasoning = ChatOpenAI(
+        model="gpt-5",
+        reasoning_effort="low",
+        #temperature=0.3,
     )
     """
     llm_with_reasoning = ChatUpstage(
