@@ -136,11 +136,20 @@ def init_supervisor_node(llm: BaseChatModel):
     return supervisor_node
 
 
+class StreamGraphType(Protocol):
+
+    def __call__(self,
+                 user_msg: str,
+                 curr_chat: Chat,
+                 config: Optional[RunnableConfig] = ...) -> AsyncIterator[dict]:
+        ...
+
+
 def init_graph(
     llm: BaseChatModel,
     db: AsyncIOMotorDatabase,
     target_count: int = 3,
-):
+) -> StreamGraphType:
     sg = StateGraph(GraphState)
 
     llm_with_reasoning = ChatUpstage(
