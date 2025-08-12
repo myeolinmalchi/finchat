@@ -27,7 +27,7 @@ class GraphState(TypedDict):
 
     candidates: ProductSearchResults  # 추천 상품 후보
     selected: Annotated[ProductSearchResults, add]  # 실제 선택된 상품
-    user_info: Dict[str, Any]  # 사용자 정보
+    user_info: Dict[str, Any] | None  # 사용자 정보
 
     offset: int
     target_count: int  # 목표 상품 개수
