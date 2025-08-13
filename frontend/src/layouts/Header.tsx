@@ -51,7 +51,7 @@ const HeaderDropDown = ({ visible }: HeaderDropDownProps) => {
 
 const HeaderContainer = ({ children }: { children?: React.ReactNode }) => {
   return (
-    <div className="fixed right-0 top-0 z-20 flex h-[100px] w-[calc(100vw-76px)] items-center justify-end pr-[60px] pt-[36px]">
+    <div className="fixed right-0 top-0 z-20 flex h-[32px] box-content w-[calc(100vw-76px)] items-center justify-end pr-[60px] pt-[36px]">
       {children}
     </div>
   );
@@ -64,7 +64,7 @@ const Header = () => {
   const { userInfo, isPending } = useUserInfoStore();
   const { pathname } = useLocation();
 
-  const isHeaderVisible = pathname === '/' || pathname.startsWith('/chat/');
+  const isHeaderVisible = !pathname.startsWith('/login')
 
   if (!isHeaderVisible) {
     return <></>;
@@ -79,7 +79,7 @@ const Header = () => {
       <HeaderContainer>
         <Link
           to="/login"
-          className="py-auto flex h-[44px] w-[100px] animate-fade-in items-center justify-center rounded-[32px] bg-[#07dfaf] text-[16px] font-[700] text-white"
+          className="text-[16px] font-[700] text-gray7 animate-fade-in"
         >
           로그인
         </Link>

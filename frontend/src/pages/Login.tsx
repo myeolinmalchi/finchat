@@ -40,7 +40,7 @@ export const LoginPage = () => {
   }
 
   return (
-    <div className="relative flex h-screen w-screen flex-col items-center justify-center">
+    <div className="relative flex h-screen w-full flex-col items-center justify-center">
       <div className="text-gray7 mb-[12px] text-center text-[40px] font-[700]">
         로그인
       </div>
