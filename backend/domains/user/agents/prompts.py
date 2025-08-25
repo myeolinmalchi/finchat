@@ -25,7 +25,7 @@ MEMORY_EXTRACT_SYSTEM_PROMPT = """\
     "confidence": 0.9
   }}
 }}
-한 문장은 출력하지 않습니다."""
+content는 하나 이상의 문장으로 구성되어야 합니다."""
 
 MEMORY_EXTRACT_HUMAN_PROMPT = """\
 ### 대화 내역:

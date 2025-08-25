@@ -11,6 +11,8 @@ from langchain_core.runnables import (
     RunnableMap,
 )
 
+from kss import Kss
+
 from domains.user.agents.prompts import MEMORY_EXTRACT_HUMAN_PROMPT, MEMORY_EXTRACT_SYSTEM_PROMPT
 from domains.user.services import UserMemoryService
 from domains.user.models import UserMemory
@@ -26,6 +28,9 @@ class MemoryExtractionOutput(TypedDict):
     category: Literal["goal", "income", "risk_profile", "experience", "preference",
                       "etc"]
     metadata: Dict
+
+
+split_sentences = Kss("split_sentences")
 
 
 def build_memory_extraction_chain(
@@ -69,12 +74,17 @@ def build_memory_extraction_chain(
             print("추출된 메모리가 없습니다.")
             return None
 
-        print("사용자 메모리가 업데이트되었습니다:")
-        print(parsed_output)
+        print("before: ", parsed_output["content"])
+
+        contents: List[str] = split_sentences(parsed_output["content"])
+        combined = "\n".join(contents)
+
+        print("after: ", combined)
 
         created = await memory_service.add_memory(
             user_id=data["input"]["user_id"],
-            content=parsed_output["content"],
+            #content=parsed_output["content"],
+            content=combined,
             category=parsed_output["category"],
             metadata=parsed_output["metadata"],
         )
