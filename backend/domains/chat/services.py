@@ -12,7 +12,7 @@ from app.schemas.chat import ChatContentDTO, ChatResponseDTO
 from domains.chat.models import Chat, ChatContent, ChatMessage
 from domains.chat.repositories import ChatPreviewDTO, ChatRepository
 from domains.common.agents.supervisor import StreamGraphType
-from domains.user.repositories import UserRepository
+from domains.user.repositories import UserMemoryRepository, UserRepository
 from domains.user.services import UserNotFound
 
 import os
@@ -28,10 +28,11 @@ UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 class ChatService:
 
     def __init__(self, *, cfg: AppConfig, user_repo: UserRepository,
-                 chat_repo: ChatRepository):
+                 memory_repo: UserMemoryRepository, chat_repo: ChatRepository):
 
         self.cfg = cfg.user
         self.user_repo = user_repo
+        self.memory_repo = memory_repo
         self.chat_repo = chat_repo
 
         self.openai_client = AsyncOpenAI(
@@ -133,7 +134,11 @@ class ChatService:
 
         title_yielded = False
 
-        async for _, chunk in run_stream(user_msg=message, curr_chat=chat):
+        memories = await self.memory_repo.list_memories_by_user(user_id)
+
+        async for _, chunk in run_stream(user_msg=message,
+                                         curr_chat=chat,
+                                         memories=memories):
             payload = ChatResponseDTO(**chunk)
             data_json = json.dumps(jsonable_encoder(payload), ensure_ascii=False)
 

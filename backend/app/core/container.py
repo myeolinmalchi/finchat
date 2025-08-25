@@ -148,8 +148,10 @@ async def init_container() -> AppContainer:
             db=_c.resolve(AsyncIOMotorDatabase),
         ))
     c.register(
-        ChatService, lambda _c: ChatService(cfg=_c.resolve(AppConfig),
-                                            user_repo=_c.resolve(UserRepository),
-                                            chat_repo=_c.resolve(ChatRepository)))
+        ChatService,
+        lambda _c: ChatService(cfg=_c.resolve(AppConfig),
+                               user_repo=_c.resolve(UserRepository),
+                               memory_repo=_c.resolve(UserMemoryRepository),
+                               chat_repo=_c.resolve(ChatRepository)))
 
     return c
