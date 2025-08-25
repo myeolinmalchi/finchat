@@ -15,6 +15,8 @@ from domains.saving.agents.explain_node import init_explain_node
 from domains.saving.agents.saving_subgraph import init_saving_subgraph
 from domains.saving.agents.tool_factory import init_saving_retrieval_tools
 from domains.saving.repositories.retrieval import get_saving_by_ids
+from domains.user.models import UserMemory
+from domains.user.services import UserMemoryService
 
 SUPERVISOR_SYSTEM_PROMPT = """\
 <Role>
@@ -141,6 +143,7 @@ class StreamGraphType(Protocol):
     def __call__(self,
                  user_msg: str,
                  curr_chat: Chat,
+                 memories: List[UserMemory],
                  config: Optional[RunnableConfig] = ...) -> AsyncIterator[dict]:
         ...
 
@@ -194,6 +197,7 @@ def init_graph(
     async def stream_graph(
             user_msg: str,
             curr_chat: Chat,
+            memories: List[UserMemory] = [],
             config: Optional[RunnableConfig] = None) -> AsyncIterator[dict]:
 
         products: List[ChatProductInfo] = []
@@ -227,6 +231,7 @@ def init_graph(
             "plans": [],
             "current_step": 0,
             "user_info": None,
+            "user_memories": memories,
         }
         async for chunk in graph.astream(init_state,
                                          stream_mode="custom",
