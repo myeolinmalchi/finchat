@@ -84,8 +84,8 @@ SAVING_ANALYSIS_USER_PROMPT_TEMPLATE = """\
 ## 사용자 질문
 {user_question}
 
-## 사용자 기본 정보
-{user_info}
+## 사용자 메모리
+{user_memories}
 
 ## 상품 정보
 {product_info}

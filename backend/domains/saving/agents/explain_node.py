@@ -32,12 +32,14 @@ def init_explain_node(llm: BaseChatModel):
         research_blob = "\n\n## 외부 참고 정보\n" + "\n".join(
             f"- {d}" for d in state["documents"])
 
+        combined_memories = "\n".join([m.content for m in state["user_memories"]])
+
         if products:
 
             blob: str = "\n---\n".join(map(str, products))
 
             prompt = prompt_template.invoke({
-                "user_memory": "",
+                "user_memories": combined_memories,
                 "product_info": blob,
                 "context": research_blob,
                 "user_question": str(state["messages"][0].content),
@@ -63,7 +65,7 @@ def init_explain_node(llm: BaseChatModel):
         else:
 
             prompt = prompt_template.invoke({
-                "user_memory": "",
+                "user_memories": combined_memories,
                 "product_info": "NONE",
                 "context": research_blob,
                 "user_question": str(state["messages"][0].content),
