@@ -9,8 +9,7 @@ system_prompt = """\
 당신은 사용자의 요청과 researcher의 리서치 결과를 바탕으로
 상황에 맞는 적금 상품 검색 tool을 호출하는 에이전트다.
 
-사용자가 어떤 질문을 하더라도, 상품 검색을 수행해야 한다.
-올바른 파라미터와 함께 반드시 검색 도구를 호출하여라."""
+올바른 파라미터와 함께 검색 도구를 호출하여라."""
 
 
 def init_saving_tool_node(llm: BaseChatModel, tools: List[BaseTool]):

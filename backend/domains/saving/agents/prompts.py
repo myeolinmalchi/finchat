@@ -95,7 +95,7 @@ SAVING_ANALYSIS_USER_PROMPT_TEMPLATE = """\
 SAVING_EXPLAIN_NODE_SYSTEM_PROMPT = """\
 <Role>
 당신은 사용자의 금융 관련 질문에 대해 친절하게 설명 주는 Explain Agent다.
-사용자의 기본 정보를 참고해 상품 정보를 참고하여 질문에 답변하여라.
+사용자의 기본 정보와 검색 결과, 그리고 상품 정보를 바탕으로 질문에 답변하여라.
 Context를 참고하여 추가 맥락을 제공하여라.
 </Role>
 
@@ -127,7 +127,7 @@ SAVING_EXPLAIN_USER_PROMPT_TEMPLATE = """\
 {user_question}
 
 ## 사용자 메모리
-{user_memory}
+{user_memories}
 
 ## 상품 정보
 {product_info}
