@@ -54,10 +54,10 @@ async def _evaluate_product_fit(
     research_blob = "\n\n## 외부 참고 정보\n" + "\n".join(
         f"- {d}" for d in state["documents"])
 
-    print(state["user_info"])
+    combined_memories = "\n".join([m.content for m in state["user_memories"]])
 
     prompt = prompt_template.invoke({
-        "user_info": state["user_info"],
+        "user_memories": combined_memories,
         "user_question": str(state["messages"][0].content),
         "product_info": str(product),
         "context": research_blob,
@@ -65,14 +65,13 @@ async def _evaluate_product_fit(
 
     res = await llm.ainvoke(prompt)
     result = str(res.content)
-
+    """
     match llm:
         case ChatUpstage(model="solar-pro2"):
             result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL)
+    """
 
     parsed = _parse_saving_analysis(result)
-
-    print(parsed["answer"], parsed["valid"])
 
     return parsed["valid"]
 
@@ -82,8 +81,7 @@ def init_filter_node(llm: BaseChatModel):
     async def node(state: GraphState):
         print("============ Fileter Node ============")
         writer = get_stream_writer()
-
-        products = state.get("candidates") or []
+        candidates = state.get("candidates") or []
 
         writer({
             "chat_id": state["chat_id"],
@@ -95,15 +93,13 @@ def init_filter_node(llm: BaseChatModel):
                     "name": p.product.name,
                     "product_type": "saving",
                     "institution": p.product.institution
-                } for p in products]
+                } for p in candidates]
             }
         })
 
-        print(len(products))
-
         eval_result = await asyncio.gather(
-            *[_evaluate_product_fit(llm, product, state) for product in products])
-        filtered = [product for eval, product in zip(eval_result, products) if eval]
+            *[_evaluate_product_fit(llm, product, state) for product in candidates])
+        filtered = [product for eval, product in zip(eval_result, candidates) if eval]
 
         return {
             "selected": filtered,

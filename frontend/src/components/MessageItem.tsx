@@ -1,5 +1,6 @@
-import { ChatDetailItem } from '@/api/chat';
 import ReactMarkdown from 'react-markdown';
+
+import { ChatDetailItem } from '@/api/chat';
 
 import { ChatbotResponseRenderer } from './ChatbotResponseRenderer';
 import { PendingTaskLoader } from './PendingTaskLoader';
@@ -11,13 +12,14 @@ interface MessageItemProps {
 export const MessageItem = ({ chatMessage }: MessageItemProps) => {
   const { message: textContent, products } = chatMessage.content || {};
   const isUser = chatMessage.role === 'user';
-  const isPending = 
-    !isUser && !products && textContent?.endsWith('니다.');
+  const isPending = !isUser && !products && textContent?.endsWith('니다.');
 
   return (
     <div
       className={`mb-[52px] w-fit rounded-[32px] font-[500] text-black ${
-        isUser ? 'ml-auto max-w-[70%] bg-[#FAF8F6] px-[20px] py-[12px]' : 'mr-auto'
+        isUser
+          ? 'ml-auto max-w-[70%] bg-[#FAF8F6] px-[20px] py-[12px]'
+          : 'mr-auto'
       }`}
     >
       {/* 사용자 메시지 */}

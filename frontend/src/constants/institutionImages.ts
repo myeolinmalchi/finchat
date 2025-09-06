@@ -1,6 +1,7 @@
 import busan from '@/assets/bank/busan.svg';
 import cu from '@/assets/bank/cu.svg';
 import ibk from '@/assets/bank/ibk.svg';
+import imbank from '@/assets/bank/imbank.svg';
 import jeju from '@/assets/bank/jeju.svg';
 import kakao from '@/assets/bank/kakao.svg';
 import kb from '@/assets/bank/kb.svg';
@@ -16,7 +17,6 @@ import sh from '@/assets/bank/sh.svg';
 import shinhan from '@/assets/bank/shinhan.svg';
 import toss from '@/assets/bank/toss.svg';
 import woori from '@/assets/bank/woori.svg';
-import imbank from '@/assets/bank/imbank.svg';
 
 export const institutionImages: Record<string, string> = {
   default: kb,

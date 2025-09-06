@@ -1,18 +1,21 @@
+import { useState } from 'react';
+
 import ReactMarkdown from 'react-markdown';
-import { institutionImages } from '@/constants/institutionImages';
+
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import { Navigation, Pagination } from 'swiper/modules';
 import { Swiper, SwiperSlide } from 'swiper/react';
 
+import { institutionImages } from '@/constants/institutionImages';
+
 import { Product } from '@/api/chat';
 
-import leftArrow from '@/assets/chat/left-arrow.svg';
 import leftArrowHover from '@/assets/chat/left-arrow-hover.svg';
-import rightArrow from '@/assets/chat/right-arrow.svg';
+import leftArrow from '@/assets/chat/left-arrow.svg';
 import rightArrowHover from '@/assets/chat/right-arrow-hover.svg';
-import { useState } from 'react';
+import rightArrow from '@/assets/chat/right-arrow.svg';
 
 interface ProductProps {
   products: Product[];
@@ -89,8 +92,8 @@ export const ChatbotResponseRenderer = ({ products }: ProductProps) => {
                   ))}
                 </div>
 
-                <div className="rounded-[8px] bg-[#F3F6F8] px-[24px] py-[20px] text-[16px] font-[400] leading-[24px] text-[#242525] h-[220px]">
-                  <div className="prose h-full max-h-full scrollbar-hide [&::-webkit-scrollbar]:[width:8px] [&::-webkit-scrollbar-thumb]:[background-color:lightgray] [&::-webkit-scrollbar-thumb]:[border-radius:8px] [&::-webkit-scrollbar-thumb]:[bg-none] overflow-y-auto">
+                <div className="h-[220px] rounded-[8px] bg-[#F3F6F8] px-[24px] py-[20px] text-[16px] font-[400] leading-[24px] text-[#242525]">
+                  <div className="scrollbar-hide [&::-webkit-scrollbar-thumb]:[bg-none] prose h-full max-h-full overflow-y-auto [&::-webkit-scrollbar-thumb]:[background-color:lightgray] [&::-webkit-scrollbar-thumb]:[border-radius:8px] [&::-webkit-scrollbar]:[width:8px]">
                     <ReactMarkdown>{product.details || ''}</ReactMarkdown>
                   </div>
 

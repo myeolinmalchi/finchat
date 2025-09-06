@@ -11,6 +11,7 @@ import { useChatList } from '@/hooks/useChatList';
 
 import { ChatInput } from '@/components/ChatInput';
 import { MessageItem } from '@/components/MessageItem';
+import { Sidebar } from '@/components/Sidebar';
 
 export const HomePage = () => {
   const { data: chatListData } = useChatList();
@@ -67,8 +68,8 @@ export const HomePage = () => {
         )}
 
         <div
-          className={`w-full max-w-[800px] ${
-            messages.length === 0 ? '' : 'custom-scroll flex-1 overflow-y-auto'
+          className={`absolute left-[calc(50%+76px/2)] z-30 min-h-fit w-full max-w-[800px] translate-x-[-50%] pb-[200px] ${
+            messages.length === 0 ? '' : 'flex-1'
           }`}
         >
           {messages.map((m, i) => (

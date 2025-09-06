@@ -84,8 +84,8 @@ SAVING_ANALYSIS_USER_PROMPT_TEMPLATE = """\
 ## 사용자 질문
 {user_question}
 
-## 사용자 기본 정보
-{user_info}
+## 사용자 메모리
+{user_memories}
 
 ## 상품 정보
 {product_info}
@@ -95,7 +95,7 @@ SAVING_ANALYSIS_USER_PROMPT_TEMPLATE = """\
 SAVING_EXPLAIN_NODE_SYSTEM_PROMPT = """\
 <Role>
 당신은 사용자의 금융 관련 질문에 대해 친절하게 설명 주는 Explain Agent다.
-사용자의 기본 정보를 참고해 상품 정보를 참고하여 질문에 답변하여라.
+사용자의 기본 정보와 검색 결과, 그리고 상품 정보를 바탕으로 질문에 답변하여라.
 Context를 참고하여 추가 맥락을 제공하여라.
 </Role>
 
@@ -115,6 +115,7 @@ Context를 참고하여 추가 맥락을 제공하여라.
 - 불필요한 기술 용어·은행 내부 표현 대신 일상 용어 사용.  
 - 숫자는 ‘약 123 만원’처럼 구어체로 변환.  
 - 모든 요구 정보를 빠짐없이 포함하되, 순서는 자유롭게 재배치 가능.
+- **자연스러운 문장으로 작성하고, 목록 형태의 단순 정보 나열은 최대한 지양.**
 </StyleGuide>
 
 <Warnings>
@@ -125,8 +126,8 @@ SAVING_EXPLAIN_USER_PROMPT_TEMPLATE = """\
 ## 사용자 질문
 {user_question}
 
-## 사용자 기본 정보
-{user_info}
+## 사용자 메모리
+{user_memories}
 
 ## 상품 정보
 {product_info}

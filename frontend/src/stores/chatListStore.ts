@@ -1,5 +1,6 @@
-import { ChatListItem } from '@/api/chat';
 import { create } from 'zustand';
+
+import { ChatListItem } from '@/api/chat';
 
 interface ChatListState {
   chatList: ChatListItem[];

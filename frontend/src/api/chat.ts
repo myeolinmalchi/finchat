@@ -1,6 +1,7 @@
 import { useChatListStore } from '@/stores/chatListStore';
-import { fetchInstance } from './fetchInstance';
 import { useChatProductStore } from '@/stores/chatProductStore';
+
+import { fetchInstance } from './fetchInstance';
 
 // 대화 요청
 export interface ChatRequestBody {

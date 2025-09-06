@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 
 import uuid
 
@@ -57,3 +57,17 @@ class Token(BaseModel):
     refresh_token_expires_at: datetime
 
     #model_config = ConfigDict(populate_by_name=True)
+
+
+class UserMemory(BaseModel):
+    """사용자 장기 메모리 도큐먼트 스키마"""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), alias="_id")
+
+    user_id: str
+    content: str
+    category: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

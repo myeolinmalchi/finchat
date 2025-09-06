@@ -1,11 +1,11 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo.results import DeleteResult
 
 from app.core.config import AppConfig
-from domains.user.models import SocialProviders, SocialAccount, User
+from domains.user.models import SocialProviders, SocialAccount, User, UserMemory
 
 
 class SocialRepository:
@@ -84,4 +84,54 @@ class UserRepository:
         """유저 삭제"""
 
         result: DeleteResult = await self.collection.delete_one({"_id": user_id})
+        return result.deleted_count > 0
+
+
+class UserMemoryRepository:
+    """`user_memories` 컬렉션 CRUD 전담."""
+
+    def __init__(self, *, cfg: AppConfig, db: AsyncIOMotorDatabase):
+        self.collection = db.get_collection(cfg.mongo.collections.user_memories)
+
+    # ──────────────────── Create ────────────────────
+    async def create_memory(self, memory: UserMemory) -> UserMemory:
+        await self.collection.insert_one(memory.model_dump(by_alias=True))
+        return memory
+
+    # ──────────────────── Read ────────────────────
+    async def get_memory_by_id(self, memory_id: str) -> Optional[UserMemory]:
+        doc = await self.collection.find_one({"_id": memory_id})
+        return UserMemory.model_validate(doc) if doc else None
+
+    async def list_memories_by_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = 100,
+        skip: int = 0,
+    ) -> List[UserMemory]:
+        #sort_order = DESCENDING if newest_first else ASCENDING
+        cursor = (self.collection.find({
+            "user_id": user_id
+        }).sort("created_at").skip(skip).limit(limit))
+        return [UserMemory.model_validate(d) async for d in cursor]
+
+    # ──────────────────── Update ────────────────────
+    async def update_memory(self, memory_id: str,
+                            update_data: Dict[str, Any]) -> Optional[UserMemory]:
+        payload = {k: v for k, v in update_data.items() if v is not None}
+        if not payload:
+            return await self.get_memory_by_id(memory_id)
+
+        payload["updated_at"] = datetime.utcnow()
+        doc = await self.collection.find_one_and_update(
+            {"_id": memory_id},
+            {"$set": payload},
+            return_document=True,
+        )
+        return UserMemory.model_validate(doc) if doc else None
+
+    # ──────────────────── Delete ────────────────────
+    async def delete_memory(self, memory_id: str) -> bool:
+        result: DeleteResult = await self.collection.delete_one({"_id": memory_id})
         return result.deleted_count > 0

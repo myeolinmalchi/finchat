@@ -1,6 +1,6 @@
 from typing import Any, Callable, Dict, Type, TypeVar, cast
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.config import AppConfig
 from domains.auth.repositories import TokenRepository, TicketRepository
@@ -9,8 +9,8 @@ from domains.auth.services import KakaoOAuthService, TicketService, TokenService
 from domains.auth.usecases import KakaoAuthUseCase
 from domains.chat.repositories import ChatRepository
 from domains.chat.services import ChatService
-from domains.user.repositories import SocialRepository, UserRepository
-from domains.user.services import UserService
+from domains.user.repositories import SocialRepository, UserMemoryRepository, UserRepository
+from domains.user.services import UserMemoryService, UserService
 
 from functools import lru_cache
 
@@ -81,6 +81,18 @@ async def init_container() -> AppContainer:
         return cfg.mongo.connect()
 
     c.register(AsyncIOMotorDatabase, _db_factory)
+    c.register(
+        UserMemoryRepository,
+        lambda _c: UserMemoryRepository(cfg=_c.resolve(AppConfig),
+                                        db=_c.resolve(AsyncIOMotorDatabase)),
+    )
+
+    c.register(
+        UserMemoryService,
+        lambda _c: UserMemoryService(cfg=_c.resolve(AppConfig),
+                                     memory_repo=_c.resolve(UserMemoryRepository),
+                                     user_repo=_c.resolve(UserRepository)),
+    )
 
     c.register(
         UserRepository, lambda _c: UserRepository(
@@ -136,10 +148,10 @@ async def init_container() -> AppContainer:
             db=_c.resolve(AsyncIOMotorDatabase),
         ))
     c.register(
-        ChatService, lambda _c: ChatService(cfg=_c.resolve(AppConfig),
-                                            user_repo=_c.resolve(UserRepository),
-                                            chat_repo=_c.resolve(ChatRepository)))
-
-    #await c.resolve(TicketRepository).ensure_indexes()
+        ChatService,
+        lambda _c: ChatService(cfg=_c.resolve(AppConfig),
+                               user_repo=_c.resolve(UserRepository),
+                               memory_repo=_c.resolve(UserMemoryRepository),
+                               chat_repo=_c.resolve(ChatRepository)))
 
     return c

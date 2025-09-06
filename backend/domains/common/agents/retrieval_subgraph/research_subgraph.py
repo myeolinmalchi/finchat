@@ -36,7 +36,7 @@ def init_query_generation_node(llm: BaseChatModel):
             "chat_id": state.chat_id,
             "status": "pending",
             "content": {
-                "message": "검색어를 생성 중입니다."
+                "message": "웹 검색을 수행 중입니다."
             }
         })
 

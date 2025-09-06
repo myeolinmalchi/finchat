@@ -1,6 +1,8 @@
-import spinner from '@/assets/chat/spinner.svg';
-import { institutionImages } from '@/constants/institutionImages';
 import { useChatProductStore } from '@/stores/chatProductStore';
+
+import { institutionImages } from '@/constants/institutionImages';
+
+import spinner from '@/assets/chat/spinner.svg';
 
 interface PendingProps {
   pendingMessage?: string;

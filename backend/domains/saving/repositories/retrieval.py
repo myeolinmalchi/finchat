@@ -2,10 +2,20 @@ from typing import Optional, List
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from common.database import init_mongodb_client
+from domains.saving.models import Saving
 from domains.saving.schemas import (
     SavingRateWeights,
     SavingSearchResult,
 )
+
+
+async def get_saving_by_ids(col: AsyncIOMotorCollection, ids: List[str]):
+    cursor = col.find({"_id": {"$in": ids}})
+    raw_savings = await cursor.to_list()
+    savings = [Saving.model_validate(raw) for raw in raw_savings]
+    savings = [SavingSearchResult(product=saving) for saving in savings]
+
+    return savings
 
 
 def build_search_pipeline(
@@ -386,8 +396,8 @@ async def _test():
     collection = db.get_collection("savings")
 
     weights = SavingRateWeights(base=0.3, max=0.3)
-    #target_amount = 3_000_000
-    monthly_deposit = 100_000
+    target_amount = 3_000_000
+    monthly_deposit = 200_000
     total_term_months = 12
     top_k = 10
 

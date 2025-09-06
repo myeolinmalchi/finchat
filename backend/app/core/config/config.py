@@ -1,58 +1,19 @@
 import os
-from dataclasses import dataclass, field
-from typing import Optional
-
-from dotenv import load_dotenv
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from dataclasses import dataclass
 
 from domains.auth.config import AuthConfig, KakaoOAuthConfig
 from domains.user.config import UserServiceConfig
 
-load_dotenv()
-
-
-@dataclass(frozen=True)
-class MongoCollections:
-
-    users: str = field(default_factory=lambda: os.getenv("COL_USERS", "users"))
-    tokens: str = field(default_factory=lambda: os.getenv("COL_TOKENS", "tokens"))
-    social_accounts: str = field(
-        default_factory=lambda: os.getenv("COL_SOCIAL_ACCOUNTS", "social_accounts"))
-    tickets: str = field(
-        default_factory=lambda: os.getenv("COL_LOGIN_TICKETS", "login_tickets"))
-
-    chats: str = field(default_factory=lambda: os.getenv("COL_CHATS", "chats"))
-
-
-@dataclass(frozen=True)
-class MongoConfig:
-
-    host: str
-    port: str
-    user: str
-    pwd: str
-    dbname: str
-    auth_source: Optional[str] = None
-
-    collections: MongoCollections = MongoCollections()
-
-    @property
-    def uri(self) -> str:
-        auth_db = self.auth_source or self.dbname
-        if self.user and self.pwd:
-            return f"mongodb://{self.user}:{self.pwd}@{self.host}:{self.port}/{self.dbname}?authSource={auth_db}"
-        return f"mongodb://{self.host}:{self.port}/{self.dbname}"
-
-    def connect(self) -> AsyncIOMotorDatabase:
-        client = AsyncIOMotorClient(self.uri)
-        db = client.get_database(self.dbname)
-        return db
+from .mongo import MongoConfig
+from .chroma import ChromaConfig
 
 
 @dataclass(frozen=True)
 class AppConfig:
 
     mongo: MongoConfig
+    chroma: ChromaConfig
+
     auth: AuthConfig
     user: UserServiceConfig
     kakao: KakaoOAuthConfig
@@ -67,6 +28,7 @@ class AppConfig:
                 pwd=os.getenv("MONGODB_PWD", ""),
                 dbname=os.getenv("MONGODB_DBNAME", "app"),
             ),
+            chroma=ChromaConfig(),
             auth=AuthConfig(
                 secret_key=os.getenv("JWT_SECRET_KEY", "dev-secret"),
                 algorithm=os.getenv("JWT_ALGORITHM", "HS256"),

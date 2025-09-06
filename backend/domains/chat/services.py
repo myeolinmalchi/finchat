@@ -3,13 +3,16 @@ import json
 from typing import AsyncGenerator, List, Optional
 
 from fastapi.encoders import jsonable_encoder
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableSerializable
 from openai import AsyncOpenAI
 from pymongo.results import UpdateResult
 from app.core.config import AppConfig
 from app.schemas.chat import ChatContentDTO, ChatResponseDTO
 from domains.chat.models import Chat, ChatContent, ChatMessage
 from domains.chat.repositories import ChatPreviewDTO, ChatRepository
-from domains.user.repositories import UserRepository
+from domains.common.agents.supervisor import StreamGraphType
+from domains.user.repositories import UserMemoryRepository, UserRepository
 from domains.user.services import UserNotFound
 
 import os
@@ -25,10 +28,11 @@ UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 class ChatService:
 
     def __init__(self, *, cfg: AppConfig, user_repo: UserRepository,
-                 chat_repo: ChatRepository):
+                 memory_repo: UserMemoryRepository, chat_repo: ChatRepository):
 
         self.cfg = cfg.user
         self.user_repo = user_repo
+        self.memory_repo = memory_repo
         self.chat_repo = chat_repo
 
         self.openai_client = AsyncOpenAI(
@@ -87,20 +91,34 @@ class ChatService:
             raise ChatNotFound("Chat does not exist")
         return chat
 
-    async def chat_events(self, *, chat_id: Optional[str], user_id: str, message: str,
-                          run_stream) -> AsyncGenerator[str, None]:
+    async def chat_events(
+            self, *, chat_id: Optional[str], user_id: str, message: str,
+            run_stream: StreamGraphType,
+            memory_chain: RunnableSerializable) -> AsyncGenerator[str, None]:
 
         if not chat_id:
             chat = await self.create_chat(Chat(user_id=user_id))
         else:
             chat = await self.get_chat_detail(chat_id)
 
+        prev_messages = list(
+            map(
+                lambda msg: HumanMessage(content=msg.content.message or "")
+                if msg.role == "assistant" else AIMessage(content=msg.content.message or
+                                                          ""), chat.messages))
+
+        asyncio.create_task(
+            memory_chain.ainvoke({
+                "user_id": chat.user_id,
+                "messages": [*prev_messages,
+                             HumanMessage(content=message)]
+            }))
+
         title_task = None
         if not chat.title:
             title_task = asyncio.create_task(self.generate_chat_title(chat.id, message))
 
         user_message = ChatMessage(role="user", content=ChatContent(message=message))
-        print(chat.id)
         await self.add_message(chat_id=chat.id, message=user_message)
 
         products = []
@@ -116,7 +134,11 @@ class ChatService:
 
         title_yielded = False
 
-        async for _, chunk in run_stream(message, chat.id):
+        memories = await self.memory_repo.list_memories_by_user(user_id)
+
+        async for _, chunk in run_stream(user_msg=message,
+                                         curr_chat=chat,
+                                         memories=memories):
             payload = ChatResponseDTO(**chunk)
             data_json = json.dumps(jsonable_encoder(payload), ensure_ascii=False)
 
@@ -148,7 +170,7 @@ class ChatService:
         assistant_message = ChatMessage(role="assistant",
                                         content=ChatContent(
                                             message="".join(reply_chunks),
-                                            products=products))
+                                            products=products))  # type: ignore
         await self.add_message(chat_id=chat.id, message=assistant_message)
 
         yield "data: [DONE]\n\n"

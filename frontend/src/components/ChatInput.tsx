@@ -46,7 +46,7 @@ export const ChatInput = ({
   };
 
   return (
-    <div className="relative mx-auto w-[800px]">
+    <div className="absolute bottom-[40px] left-[calc(50%+76px/2-4px)] z-40 flex h-fit w-[720px] translate-x-[-50%]">
       <textarea
         ref={textareaRef}
         value={input}

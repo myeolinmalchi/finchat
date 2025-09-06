@@ -12,7 +12,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8899',
+        target:
+          'http://ec2-3-34-52-134.ap-northeast-2.compute.amazonaws.com:8000',
         changeOrigin: true,
         secure: false,
         ws: true,

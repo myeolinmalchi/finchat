@@ -8,6 +8,8 @@ import { AppLayout } from '@/layouts/AppLayout';
 
 import { FeedPage } from '@/pages/Feed';
 import { HomePage } from '@/pages/Home';
+import { LoginPage } from '@/pages/Login';
+import { SignupPage } from '@/pages/Signup';
 
 import { RouterPath } from './path';
 
@@ -23,6 +25,10 @@ const router = createBrowserRouter([
       {
         path: RouterPath.CHAT_DETAIL,
         element: <HomePage />,
+      },
+      {
+        path: RouterPath.LOGIN,
+        element: <LoginPage />,
       },
       {
         path: RouterPath.FEED,
