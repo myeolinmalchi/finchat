@@ -10,3 +10,17 @@
 .swiper-pagination-bullet-active.custom-bullet {
   @apply rounded-full bg-[#96989A];
 }
+
+/* 커스텀 스크롤바 */
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background-color: #e2e6e9;
+  border-radius: 12px;
+}

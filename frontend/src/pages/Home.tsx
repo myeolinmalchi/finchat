@@ -93,16 +93,17 @@ export const HomePage = () => {
                 ? 'flex items-center justify-center'
                 : 'absolute bottom-0 left-0 w-full py-5'
             }`}
-          ></div>
+          >
+            <ChatInput
+              input={input}
+              setInput={setInput}
+              isStreaming={isStreaming}
+              onSend={() => sendMessage(input, chatId)}
+              onCancel={cancelStreamingResponse}
+            />
+          </div>
         </div>
       </div>
-      <ChatInput
-        input={input}
-        setInput={setInput}
-        isStreaming={isStreaming}
-        onSend={() => sendMessage(input, chatId)}
-        onCancel={cancelStreamingResponse}
-      />
     </div>
   );
 };

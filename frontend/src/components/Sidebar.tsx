@@ -8,19 +8,30 @@ import { useChatListStore } from '@/stores/chatListStore';
 import { ChatListItem } from '@/api/chat';
 
 import logo from '@/assets/sidebar/logo.svg';
+import memoryIcon from '@/assets/sidebar/memory.svg';
+
 import newChatHover from '@/assets/sidebar/new-chat-hover.svg';
 import newChat from '@/assets/sidebar/new-chat.svg';
 import policyIconHover from '@/assets/sidebar/policy-hover.svg';
 import policyIcon from '@/assets/sidebar/policy.svg';
 import prevIconHover from '@/assets/sidebar/prev-hover.svg';
 import prevIcon from '@/assets/sidebar/prev.svg';
+import settingIconHover from '@/assets/sidebar/setting-hover.svg';
+import settingIcon from '@/assets/sidebar/setting.svg';
+
+import { MemoryPanel } from './MemoryPanel';
 
 interface SidebarProps {
   isSidebarOpen: boolean;
+  setIsSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
 }
 
-export const Sidebar = ({ isSidebarOpen, toggleSidebar }: SidebarProps) => {
+export const Sidebar = ({
+  isSidebarOpen,
+  setIsSidebarOpen,
+  toggleSidebar,
+}: SidebarProps) => {
   const chatList = useChatListStore((state) => state.chatList);
 
   const formatDateLabel = (updatedAt: string) => {
@@ -63,6 +74,7 @@ export const Sidebar = ({ isSidebarOpen, toggleSidebar }: SidebarProps) => {
 
   const navigate = useNavigate();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
 
   const navigateToChatDetail = (chatId: string) => {
     navigate(`/chat/${chatId}`);
@@ -103,7 +115,6 @@ export const Sidebar = ({ isSidebarOpen, toggleSidebar }: SidebarProps) => {
             <span>정책</span>
           </div>
         </div>
-
         <button
           onClick={() => navigate('/')}
           onMouseEnter={() => setHoveredItem('new')}
@@ -112,9 +123,45 @@ export const Sidebar = ({ isSidebarOpen, toggleSidebar }: SidebarProps) => {
           <img
             src={hoveredItem === 'new' ? newChatHover : newChat}
             alt="new"
-            className="w-[40px]"
+            className="mb-[20px] w-[40px]"
           />
         </button>
+        <button
+          className="relative"
+          onMouseEnter={() => setHoveredItem('setting')}
+          onMouseLeave={() => setHoveredItem(null)}
+        >
+          <img
+            src={hoveredItem === 'setting' ? settingIconHover : settingIcon}
+            alt="setting"
+            className="w-[40px]"
+            onClick={() => {
+              setIsMemoryPanelOpen(true);
+              setIsSidebarOpen(false);
+            }}
+          />
+
+          {hoveredItem === 'setting' && (
+            <div
+              className="text-gray7 absolute bottom-1/2 left-full z-[9999] ml-[6px] flex w-[180px] translate-y-1/2 items-center justify-center gap-[8px] whitespace-nowrap rounded-[4px] border border-gray2 bg-white py-[12px] text-[16px] font-[600] shadow-[0_0_4px_rgba(27,27,27,0.04)]"
+              onClick={() => {
+                setIsMemoryPanelOpen(true);
+                setIsSidebarOpen(false);
+              }}
+            >
+              <img
+                src={memoryIcon}
+                alt="memory"
+                className="h-[20px] w-[20px]"
+              />
+              메모리 관리
+            </div>
+          )}
+        </button>
+
+        {isMemoryPanelOpen && (
+          <MemoryPanel onClose={() => setIsMemoryPanelOpen(false)} />
+        )}
       </div>
 
       {/* 펼친 상태 */}
